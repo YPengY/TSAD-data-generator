@@ -1,0 +1,127 @@
+﻿{
+  "num_samples": 120,
+  "sequence_length": {
+    "min": 100,
+    "max": 1000
+  },
+  "anomaly_sample_ratio": 0.7,
+  "multivariate_flag": true,
+  "num_features": {
+    "min": 2,
+    "max": 8
+  },
+  "seed": 42,
+  "weights": {
+    "seasonality_type": {
+      "none": 0.3,
+      "sine": 0.3,
+      "square": 0.05,
+      "triangle": 0.05,
+      "wavelet": 0.3
+    },
+    "trend_type": {
+      "decrease": 0.2,
+      "increase": 0.2,
+      "keep_steady": 0.2,
+      "multiple": 0.3,
+      "arima": 0.1
+    },
+    "frequency_regime": {
+      "high": 0.5,
+      "low": 0.5
+    },
+    "noise_level": {
+      "almost_none": 0.25,
+      "low": 0.25,
+      "moderate": 0.25,
+      "high": 0.25
+    }
+  },
+  "stage1": {
+    "trend": {
+      "change_points": {
+        "min": 1,
+        "max": 4
+      },
+      "slope_scale": 0.02,
+      "arima_noise_scale": 0.05
+    },
+    "seasonality": {
+      "atoms": {
+        "min": 1,
+        "max": 3
+      },
+      "amplitude": {
+        "min": 0.2,
+        "max": 2.0
+      },
+      "base_period": {
+        "low": {
+          "min": 30,
+          "max": 120
+        },
+        "high": {
+          "min": 6,
+          "max": 30
+        }
+      }
+    },
+    "noise": {
+      "sigma": {
+        "almost_none": 0.01,
+        "low": 0.05,
+        "moderate": 0.1,
+        "high": 0.2
+      },
+      "volatility_windows": {
+        "min": 1,
+        "max": 3
+      },
+      "volatility_multiplier": {
+        "min": 0.1,
+        "max": 1.0
+      }
+    }
+  },
+  "causal": {
+    "num_nodes": {
+      "min": 1,
+      "max": 20
+    },
+    "edge_density": 0.12,
+    "max_lag": 12,
+    "a_i_bound": 0.8,
+    "bias_std": 0.1,
+    "b_ij_std": 0.35,
+    "alpha_i_min": 0.1,
+    "alpha_i_max": 0.9
+  },
+  "anomaly": {
+    "events_per_sample": {
+      "min": 1,
+      "max": 3
+    },
+    "window_length": {
+      "min": 8,
+      "max": 80
+    },
+    "local_types": [
+      "upward_spike",
+      "downward_spike",
+      "sudden_increase",
+      "sudden_decrease",
+      "shake",
+      "plateau"
+    ],
+    "seasonal_types": [
+      "waveform_inversion",
+      "amplitude_scaling",
+      "frequency_change",
+      "phase_shift",
+      "noise_injection"
+    ],
+    "p_endogenous": 0.5,
+    "p_use_seasonal_injector": 0.4
+  }
+}
+

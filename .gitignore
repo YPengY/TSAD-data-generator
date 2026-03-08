@@ -1,0 +1,42 @@
+﻿# Python cache / bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+.venv_iso_*/
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+
+# Test / tooling cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Temporary files
+.tmp/
+.tmp_cli_config.json
+py_write_test.txt
+
+# Generated dataset outputs
+outputs/
+outputs_demo/
+
+# Local notes / references (not source code)
+timercd_translated.txt
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
