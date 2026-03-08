@@ -1,34 +1,40 @@
-﻿# Synthetic TSAD Data Generator
+# TSAD Data Generator
 
-A parameterized implementation framework for Appendix C (Data Generation) of the TimeRCD paper.
+A parameter-first synthetic time series anomaly dataset generator inspired by Appendix C of the TimeRCD paper.
 
-## What Is Implemented
+## Overview
 
-- Stage 1 baseline generation: trend + seasonality + heteroskedastic noise
-- Stage 2 causal context: DAG sampling + ARX-style causal propagation
-- Stage 3 anomaly injection:
-  - local/change anomalies (spike, shift, shake, plateau)
-  - seasonal/contextual anomalies (inversion, amplitude, frequency, phase, noise)
-  - endogenous propagation over causal graph (with edge gains and lags)
-- Stage 4 labeling:
-  - point-level mask `[T, D]`
-  - sequence-level mask `[T]`
-  - event table
-  - root-cause and affected-node mappings
-- Output format:
-  - `sample_XXXXXX.npz` (series/labels arrays)
-  - `sample_XXXXXX.json` (events, graph, parameters, summary)
+This project builds synthetic time series data in four stages:
+
+1. Stage 1 (baseline): trend + seasonality + heteroskedastic noise.
+2. Stage 2 (causal context): sample a DAG and ARX parameters for multivariate dependencies.
+3. Stage 3 (anomalies): sample local and seasonal anomaly events, then apply them.
+4. Stage 4 (labels): create point-level and event-level labels with root-cause metadata.
+
+The workflow is parameter-first: it samples parameters first, then realizes final sequences from those parameters.
+
+## Implemented Features
+
+- Trend types: increase, decrease, steady, piecewise, arima-like.
+- Seasonality types: none, sine, square, triangle, wavelet-like atoms.
+- Noise with optional piecewise volatility bursts.
+- Causal graph sampling (DAG) and ARX simulation.
+- Local anomalies (spike/shift/shake/plateau) and seasonal anomalies.
+- Endogenous propagation over causal edges.
+- Output as NPZ + JSON per sample.
 
 ## Project Layout
 
-- `configs/default.json|yaml`: generation controls
-- `scripts/generate_dataset.py`: CLI entry
-- `src/synthtsad/components/*`: Stage 1 modules
-- `src/synthtsad/causal/*`: Stage 2 modules
-- `src/synthtsad/anomaly/*`: Stage 3 modules
-- `src/synthtsad/labeling/labeler.py`: Stage 4 labels
-- `src/synthtsad/io/writer.py`: dataset writer
-- `scripts/setup_env.ps1`: venv bootstrap for Windows
+- `configs/default.json|yaml`: generation configuration.
+- `scripts/generate_dataset.py`: CLI entrypoint.
+- `scripts/setup_env.ps1`: environment bootstrap script.
+- `src/synthtsad/pipeline.py`: end-to-end orchestration.
+- `src/synthtsad/components/*`: Stage 1 modules.
+- `src/synthtsad/causal/*`: Stage 2 modules.
+- `src/synthtsad/anomaly/*`: Stage 3 modules.
+- `src/synthtsad/labeling/labeler.py`: Stage 4 labels.
+- `src/synthtsad/io/writer.py`: output writer.
+- `tests/*`: smoke and behavior tests.
 
 ## Environment Setup (Windows)
 
@@ -46,12 +52,29 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup_env.ps1
 Optional overrides:
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\generate_dataset.py --config .\configs\default.json --output .\outputs --num-samples 20 --seed 7
+.\.venv\Scripts\python.exe .\scripts\generate_dataset.py --config .\configs\default.json --output .\outputs --num-samples 120 --seed 7
 ```
 
-## Notes
+Print effective config without generation:
 
-- JSON config works without PyYAML.
-- YAML config requires `pyyaml`.
-- Sampling is deterministic when `seed` is fixed.\n- `setup_env.ps1` automatically falls back to `include-system-site-packages=true` if `ensurepip` is blocked by local policy.
+```powershell
+.\.venv\Scripts\python.exe .\scripts\generate_dataset.py --config .\configs\default.json --print-config
+```
 
+## Output Format
+
+For each sample, two files are generated:
+
+- `sample_XXXXXX.npz`
+  - `series`: observed sequence `[T, D]`
+  - `normal_series`: normal reference `[T, D]`
+  - `point_mask`: anomaly mask `[T, D]`
+  - `point_mask_any`: sequence-level mask `[T]`
+- `sample_XXXXXX.json`
+  - summary, graph, sampled parameters, sampled events, realized events, label metadata
+
+## Test
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+```
