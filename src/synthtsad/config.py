@@ -25,6 +25,10 @@ class Stage1Config:
     trend_change_points: IntRange
     trend_slope_scale: float
     arima_noise_scale: float
+    arima_p_max: int
+    arima_q_max: int
+    arima_d: IntRange
+    arima_coef_bound: float
     seasonal_atoms: IntRange
     seasonal_amplitude: tuple[float, float]
     period_low: IntRange
@@ -103,6 +107,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "change_points": {"min": 1, "max": 4},
             "slope_scale": 0.02,
             "arima_noise_scale": 0.05,
+            "arima": {
+                "p_max": 2,
+                "q_max": 2,
+                "d": {"min": 1, "max": 2},
+                "coef_bound": 0.6,
+            },
         },
         "seasonality": {
             "atoms": {"min": 1, "max": 3},
@@ -204,6 +214,10 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
         trend_change_points=ensure_int_range(trend_raw["change_points"], "stage1.trend.change_points"),
         trend_slope_scale=float(trend_raw["slope_scale"]),
         arima_noise_scale=float(trend_raw["arima_noise_scale"]),
+        arima_p_max=int(trend_raw["arima"]["p_max"]),
+        arima_q_max=int(trend_raw["arima"]["q_max"]),
+        arima_d=ensure_int_range(trend_raw["arima"]["d"], "stage1.trend.arima.d"),
+        arima_coef_bound=float(trend_raw["arima"]["coef_bound"]),
         seasonal_atoms=ensure_int_range(season_raw["atoms"], "stage1.seasonality.atoms"),
         seasonal_amplitude=(float(season_raw["amplitude"]["min"]), float(season_raw["amplitude"]["max"])),
         period_low=ensure_int_range(season_raw["base_period"]["low"], "stage1.seasonality.base_period.low"),

@@ -82,6 +82,8 @@ You can also persist these toggles in config under:
 }
 ```
 
+ARIMA trend is implemented as differenced ARMA(p,d,q) with small orders (`p,q<=2`, `d in [1,2]` by default), configurable in `stage1.trend.arima`.
+
 ## Output Format
 
 For each sample, two files are generated:

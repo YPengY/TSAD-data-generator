@@ -16,13 +16,74 @@ def _piecewise_linear(t: np.ndarray, k0: float, k1: float, cps: np.ndarray, delt
     return values
 
 
-def _render_arima_like(n: int, phi: float, noise_scale: float, seed: int) -> np.ndarray:
-    rng = np.random.default_rng(seed)
-    diff = np.zeros(n, dtype=float)
-    eps = rng.normal(0.0, noise_scale, size=n)
-    for i in range(1, n):
-        diff[i] = phi * diff[i - 1] + eps[i]
-    return np.cumsum(diff)
+def _roots_outside_unit_circle(poly_coeffs: np.ndarray) -> bool:
+    if poly_coeffs.size <= 1:
+        return True
+    roots = np.roots(poly_coeffs)
+    if roots.size == 0:
+        return True
+    return bool(np.all(np.abs(roots) > 1.01))
+
+
+def _sample_stable_ar_coeffs(rng: np.random.Generator, order: int, bound: float) -> list[float]:
+    if order <= 0:
+        return []
+    for _ in range(128):
+        coeffs = rng.uniform(-bound, bound, size=order).astype(float)
+        # AR polynomial: phi(B) = 1 - sum(phi_i B^i)
+        poly = np.concatenate(([1.0], -coeffs))
+        if _roots_outside_unit_circle(poly):
+            return coeffs.tolist()
+    return (rng.uniform(-0.2, 0.2, size=order).astype(float)).tolist()
+
+
+def _sample_invertible_ma_coeffs(rng: np.random.Generator, order: int, bound: float) -> list[float]:
+    if order <= 0:
+        return []
+    for _ in range(128):
+        coeffs = rng.uniform(-bound, bound, size=order).astype(float)
+        # MA polynomial: theta(B) = 1 + sum(theta_j B^j)
+        poly = np.concatenate(([1.0], coeffs))
+        if _roots_outside_unit_circle(poly):
+            return coeffs.tolist()
+    return (rng.uniform(-0.2, 0.2, size=order).astype(float)).tolist()
+
+
+def _simulate_differenced_arma(
+    n: int,
+    phi: np.ndarray,
+    theta: np.ndarray,
+    sigma: float,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    p = int(phi.size)
+    q = int(theta.size)
+    eps = rng.normal(0.0, sigma, size=n)
+    y = np.zeros(n, dtype=float)
+
+    for t in range(n):
+        ar_term = 0.0
+        for i in range(1, p + 1):
+            src = t - i
+            if src >= 0:
+                ar_term += float(phi[i - 1]) * y[src]
+
+        ma_term = float(eps[t])
+        for j in range(1, q + 1):
+            src = t - j
+            if src >= 0:
+                ma_term += float(theta[j - 1]) * float(eps[src])
+
+        y[t] = ar_term + ma_term
+
+    return y
+
+
+def _integrate_differences(diff_series: np.ndarray, d_order: int, base_level: float) -> np.ndarray:
+    trend = diff_series.copy()
+    for _ in range(max(1, d_order)):
+        trend = np.cumsum(trend)
+    return trend + base_level
 
 
 def sample_trend_params(n: int, config: GeneratorConfig, rng: np.random.Generator) -> TrendParams:
@@ -63,9 +124,25 @@ def sample_trend_params(n: int, config: GeneratorConfig, rng: np.random.Generato
             "slope_deltas": deltas.tolist(),
         }
 
+    p_max = max(0, int(config.stage1.arima_p_max))
+    q_max = max(0, int(config.stage1.arima_q_max))
+    d_order = int(config.stage1.arima_d.sample(rng))
+    coef_bound = float(abs(config.stage1.arima_coef_bound))
+    p = int(rng.integers(0, p_max + 1))
+    q = int(rng.integers(0, q_max + 1))
+    phi = _sample_stable_ar_coeffs(rng=rng, order=p, bound=coef_bound)
+    theta = _sample_invertible_ma_coeffs(rng=rng, order=q, bound=coef_bound)
+
     return {
         "trend_type": "arima",
-        "phi": float(rng.uniform(-0.6, 0.6)),
+        "p": p,
+        "d": d_order,
+        "q": q,
+        "phi": phi,
+        "theta": theta,
+        "sigma": float(config.stage1.arima_noise_scale),
+        "base_level": float(rng.normal(0.0, 0.2)),
+        # Kept for backward compatibility with existing consumers.
         "noise_scale": float(config.stage1.arima_noise_scale),
         "stochastic_seed": int(rng.integers(0, 2**31 - 1)),
     }
@@ -84,12 +161,31 @@ def render_trend(t: np.ndarray, params: TrendParams) -> np.ndarray:
         deltas = np.array(params["slope_deltas"], dtype=float)
         return _piecewise_linear(t, float(params["k0"]), float(params["k1"]), cps, deltas)
 
-    return _render_arima_like(
+    seed = int(params["stochastic_seed"])
+    rng = np.random.default_rng(seed)
+
+    if isinstance(params.get("phi"), list):
+        phi = np.array(params.get("phi", []), dtype=float)
+        theta = np.array(params.get("theta", []), dtype=float)
+        d_order = int(params.get("d", 1))
+        sigma = float(params.get("sigma", params.get("noise_scale", 0.05)))
+        base_level = float(params.get("base_level", 0.0))
+    else:
+        # Backward-compatible path for old ARIMA-like parameters.
+        phi = np.array([float(params["phi"])], dtype=float)
+        theta = np.array([], dtype=float)
+        d_order = 1
+        sigma = float(params.get("noise_scale", 0.05))
+        base_level = 0.0
+
+    diff_series = _simulate_differenced_arma(
         n=t.size,
-        phi=float(params["phi"]),
-        noise_scale=float(params["noise_scale"]),
-        seed=int(params["stochastic_seed"]),
+        phi=phi,
+        theta=theta,
+        sigma=sigma,
+        rng=rng,
     )
+    return _integrate_differences(diff_series=diff_series, d_order=d_order, base_level=base_level)
 
 
 def sample_trend(

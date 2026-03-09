@@ -29,8 +29,10 @@ htmlcov/
 py_write_test.txt
 
 # Generated dataset outputs
-outputs/
-outputs_demo/
+outputs*/
+
+# Local cleanup/archive folders
+_cleanup_archive_*/
 
 # Local notes / references (not source code)
 timercd_translated.txt
