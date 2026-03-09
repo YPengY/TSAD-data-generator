@@ -52,8 +52,10 @@ powershell -ExecutionPolicy Bypass -File .\scripts\setup_env.ps1
 Optional overrides:
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\generate_dataset.py --config .\configs\default.json --output .\outputs --num-samples 120 --seed 7
+.\.venv\Scripts\python.exe .\scripts\generate_dataset.py --config .\configs\default.json --output .\outputs --num-samples 120 --seed 7 --num-series 6
 ```
+
+`num_series` is sampled at the beginning of each sample. Use `--num-series` to force a fixed value (`min=max`).
 
 Debug switches (temporary disable by CLI):
 

@@ -60,8 +60,7 @@ class GeneratorConfig:
     num_samples: int
     sequence_length: IntRange
     anomaly_sample_ratio: float
-    multivariate_flag: bool
-    num_features: IntRange
+    num_series: IntRange
     seed: int | None
     weights: dict[str, dict[str, float]]
     stage1: Stage1Config
@@ -74,8 +73,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "num_samples": 100,
     "sequence_length": {"min": 100, "max": 1000},
     "anomaly_sample_ratio": 0.7,
-    "multivariate_flag": True,
-    "num_features": {"min": 2, "max": 8},
+    "num_series": {"min": 2, "max": 8},
     "seed": 42,
     "weights": {
         "seasonality_type": {
@@ -254,13 +252,23 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
         enable_seasonal_anomaly=bool(debug_raw["enable_seasonal_anomaly"]),
     )
 
+    if "num_series" in raw:
+        num_series = ensure_int_range(raw["num_series"], "num_series")
+    else:
+        if "num_features" not in raw:
+            raise ValueError("Config must define num_series (preferred) or legacy num_features.")
+        multivariate = bool(raw.get("multivariate_flag", True))
+        if multivariate:
+            num_series = ensure_int_range(raw["num_features"], "num_features")
+        else:
+            num_series = IntRange(1, 1)
+
     return GeneratorConfig(
         raw=raw,
         num_samples=int(raw["num_samples"]),
         sequence_length=ensure_int_range(raw["sequence_length"], "sequence_length"),
         anomaly_sample_ratio=float(raw["anomaly_sample_ratio"]),
-        multivariate_flag=bool(raw["multivariate_flag"]),
-        num_features=ensure_int_range(raw["num_features"], "num_features"),
+        num_series=num_series,
         seed=int(raw["seed"]) if raw.get("seed") is not None else None,
         weights=weights,
         stage1=stage1,

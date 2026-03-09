@@ -13,7 +13,7 @@ def _write_test_config(tmp_path: Path) -> Path:
     cfg = {
         "num_samples": 2,
         "sequence_length": {"min": 64, "max": 96},
-        "num_features": {"min": 3, "max": 5},
+        "num_series": {"min": 3, "max": 5},
         "seed": 7,
     }
     path = tmp_path / "cfg.json"

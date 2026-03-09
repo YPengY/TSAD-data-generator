@@ -3,8 +3,7 @@ sequence_length:
   min: 100
   max: 1000
 anomaly_sample_ratio: 0.7
-multivariate_flag: true
-num_features:
+num_series:
   min: 2
   max: 8
 seed: 42

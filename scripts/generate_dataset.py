@@ -18,6 +18,7 @@ def _cfg_from_overrides(
     path: Path,
     num_samples: int | None,
     seed: int | None,
+    num_series: int | None,
     disable_trend: bool,
     disable_seasonality: bool,
     disable_noise: bool,
@@ -36,7 +37,7 @@ def _cfg_from_overrides(
             disable_seasonal_anomaly,
         ]
     )
-    if num_samples is None and seed is None and not has_toggle:
+    if num_samples is None and seed is None and num_series is None and not has_toggle:
         return cfg
 
     raw = dict(cfg.raw)
@@ -44,6 +45,8 @@ def _cfg_from_overrides(
         raw["num_samples"] = int(num_samples)
     if seed is not None:
         raw["seed"] = int(seed)
+    if num_series is not None:
+        raw["num_series"] = {"min": int(num_series), "max": int(num_series)}
 
     debug = dict(raw.get("debug", {}))
     if disable_trend:
@@ -70,6 +73,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("outputs"), help="Output directory")
     parser.add_argument("--num-samples", type=int, default=None, help="Override config.num_samples")
     parser.add_argument("--seed", type=int, default=None, help="Override config.seed")
+    parser.add_argument("--num-series", type=int, default=None, help="Override sample series count (fixed min=max)")
     parser.add_argument("--disable-trend", action="store_true", help="Disable trend component")
     parser.add_argument("--disable-seasonality", action="store_true", help="Disable seasonality component")
     parser.add_argument("--disable-noise", action="store_true", help="Disable noise component")
@@ -83,6 +87,7 @@ def main() -> None:
         path=args.config,
         num_samples=args.num_samples,
         seed=args.seed,
+        num_series=args.num_series,
         disable_trend=args.disable_trend,
         disable_seasonality=args.disable_seasonality,
         disable_noise=args.disable_noise,

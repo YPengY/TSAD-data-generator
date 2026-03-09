@@ -42,10 +42,7 @@ class SyntheticGeneratorPipeline:
 
     def _sample_dimensions(self, rng: np.random.Generator) -> tuple[int, int]:
         n = self.config.sequence_length.sample(rng)
-        if self.config.multivariate_flag:
-            d = self.config.num_features.sample(rng)
-        else:
-            d = 1
+        d = self.config.num_series.sample(rng)
         d = int(np.clip(d, self.config.causal.num_nodes.min, self.config.causal.num_nodes.max))
         return n, d
 

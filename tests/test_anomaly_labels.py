@@ -15,7 +15,7 @@ def test_anomaly_labels_present_when_ratio_one(tmp_path: Path) -> None:
         "seed": 11,
         "anomaly_sample_ratio": 1.0,
         "sequence_length": {"min": 80, "max": 80},
-        "num_features": {"min": 4, "max": 4},
+        "num_series": {"min": 4, "max": 4},
         "anomaly": {
             "events_per_sample": {"min": 1, "max": 1},
             "p_use_seasonal_injector": 0.0,
