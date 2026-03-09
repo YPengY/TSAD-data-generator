@@ -122,6 +122,14 @@
     ],
     "p_endogenous": 0.5,
     "p_use_seasonal_injector": 0.4
+  },
+  "debug": {
+    "enable_trend": true,
+    "enable_seasonality": true,
+    "enable_noise": true,
+    "enable_causal": true,
+    "enable_local_anomaly": true,
+    "enable_seasonal_anomaly": true
   }
 }
 

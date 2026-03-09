@@ -55,10 +55,29 @@ Optional overrides:
 .\.venv\Scripts\python.exe .\scripts\generate_dataset.py --config .\configs\default.json --output .\outputs --num-samples 120 --seed 7
 ```
 
+Debug switches (temporary disable by CLI):
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\generate_dataset.py --config .\configs\default.json --output .\outputs --disable-causal --disable-noise --disable-seasonality
+```
+
 Print effective config without generation:
 
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\generate_dataset.py --config .\configs\default.json --print-config
+```
+
+You can also persist these toggles in config under:
+
+```json
+"debug": {
+  "enable_trend": true,
+  "enable_seasonality": true,
+  "enable_noise": true,
+  "enable_causal": true,
+  "enable_local_anomaly": true,
+  "enable_seasonal_anomaly": true
+}
 ```
 
 ## Output Format

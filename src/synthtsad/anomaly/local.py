@@ -6,7 +6,6 @@ from typing import Any
 import numpy as np
 
 from ..config import GeneratorConfig
-from ..utils import clamp_float
 
 
 @dataclass
@@ -130,83 +129,6 @@ class LocalAnomalyInjector:
 
         return events
 
-    def _propagate_endogenous(
-        self,
-        x_anom: np.ndarray,
-        root_event: AnomalyEvent,
-        base_effect: np.ndarray,
-        graph,
-        causal_state,
-    ) -> list[AnomalyEvent]:
-        n, d = x_anom.shape
-        adjacency = graph.adjacency
-        params = causal_state.params
-        gain = np.array(params.get("gain", np.zeros((d, d))), dtype=float)
-        lag = np.array(params.get("lag", np.zeros((d, d))), dtype=int)
-
-        root_node = int(root_event.node)
-        effect_map: dict[int, np.ndarray] = {root_node: base_effect.copy()}
-        x_anom[:, root_node] += base_effect
-
-        queue = [root_node]
-        visited_edges: set[tuple[int, int]] = set()
-        propagated_events: list[AnomalyEvent] = []
-
-        while queue:
-            src = queue.pop(0)
-            src_effect = effect_map[src]
-
-            children = np.where(adjacency[src] == 1)[0].astype(int).tolist()
-            for dst in children:
-                edge = (src, dst)
-                if edge in visited_edges:
-                    continue
-                visited_edges.add(edge)
-
-                edge_gain = float(gain[src, dst])
-                attenuation = clamp_float(abs(edge_gain), 0.05, 0.75)
-                shift = int(max(0, lag[src, dst]))
-                propagated = np.zeros(n, dtype=float)
-
-                if shift < n:
-                    propagated[shift:] = src_effect[: n - shift]
-                propagated *= attenuation
-                if not np.any(np.abs(propagated) > 1e-8):
-                    continue
-
-                x_anom[:, dst] += propagated
-                prev = effect_map.get(dst)
-                effect_map[dst] = propagated if prev is None else prev + propagated
-
-                nz = np.where(np.abs(propagated) > 1e-8)[0]
-                if nz.size > 0:
-                    propagated_events.append(
-                        AnomalyEvent(
-                            anomaly_type="propagated",
-                            node=dst,
-                            t_start=int(nz.min()),
-                            t_end=int(nz.max()) + 1,
-                            params={"from": src, "gain": edge_gain, "lag": shift},
-                            is_endogenous=True,
-                            root_cause_node=root_node,
-                            affected_nodes=[root_node, dst],
-                        )
-                    )
-                queue.append(dst)
-
-        root_realized = AnomalyEvent(
-            anomaly_type=root_event.anomaly_type,
-            node=root_node,
-            t_start=root_event.t_start,
-            t_end=root_event.t_end,
-            params={**root_event.params, "effect_l2": float(np.linalg.norm(base_effect))},
-            is_endogenous=True,
-            root_cause_node=root_node,
-            affected_nodes=sorted(effect_map.keys()),
-        )
-
-        return [root_realized, *propagated_events]
-
     def apply_events(
         self,
         x_normal: np.ndarray,
@@ -214,6 +136,8 @@ class LocalAnomalyInjector:
         graph=None,
         causal_state=None,
     ) -> tuple[np.ndarray, list[AnomalyEvent]]:
+        _ = graph
+        _ = causal_state
         x_anom = x_normal.copy()
         n, _ = x_anom.shape
         realized: list[AnomalyEvent] = []
@@ -226,20 +150,8 @@ class LocalAnomalyInjector:
                 t_end=event.t_end,
                 params=event.params,
             )
-
-            if event.is_endogenous and graph is not None and causal_state is not None:
-                realized.extend(
-                    self._propagate_endogenous(
-                        x_anom=x_anom,
-                        root_event=event,
-                        base_effect=delta,
-                        graph=graph,
-                        causal_state=causal_state,
-                    )
-                )
-            else:
-                x_anom[:, event.node] += delta
-                realized.append(event)
+            x_anom[:, event.node] += delta
+            realized.append(event)
 
         return x_anom, realized
 

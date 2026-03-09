@@ -45,6 +45,16 @@ class AnomalyConfig:
 
 
 @dataclass(frozen=True)
+class DebugConfig:
+    enable_trend: bool
+    enable_seasonality: bool
+    enable_noise: bool
+    enable_causal: bool
+    enable_local_anomaly: bool
+    enable_seasonal_anomaly: bool
+
+
+@dataclass(frozen=True)
 class GeneratorConfig:
     raw: dict[str, Any]
     num_samples: int
@@ -57,6 +67,7 @@ class GeneratorConfig:
     stage1: Stage1Config
     causal: CausalConfig
     anomaly: AnomalyConfig
+    debug: DebugConfig
 
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -145,6 +156,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "p_endogenous": 0.5,
         "p_use_seasonal_injector": 0.4,
     },
+    "debug": {
+        "enable_trend": True,
+        "enable_seasonality": True,
+        "enable_noise": True,
+        "enable_causal": True,
+        "enable_local_anomaly": True,
+        "enable_seasonal_anomaly": True,
+    },
 }
 
 
@@ -225,6 +244,16 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
         p_use_seasonal_injector=float(anomaly_raw["p_use_seasonal_injector"]),
     )
 
+    debug_raw = raw["debug"]
+    debug = DebugConfig(
+        enable_trend=bool(debug_raw["enable_trend"]),
+        enable_seasonality=bool(debug_raw["enable_seasonality"]),
+        enable_noise=bool(debug_raw["enable_noise"]),
+        enable_causal=bool(debug_raw["enable_causal"]),
+        enable_local_anomaly=bool(debug_raw["enable_local_anomaly"]),
+        enable_seasonal_anomaly=bool(debug_raw["enable_seasonal_anomaly"]),
+    )
+
     return GeneratorConfig(
         raw=raw,
         num_samples=int(raw["num_samples"]),
@@ -237,6 +266,7 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
         stage1=stage1,
         causal=causal,
         anomaly=anomaly,
+        debug=debug,
     )
 
 

@@ -14,9 +14,29 @@ from synthtsad.config import load_config, load_config_from_raw
 from synthtsad.pipeline import SyntheticGeneratorPipeline
 
 
-def _cfg_from_overrides(path: Path, num_samples: int | None, seed: int | None):
+def _cfg_from_overrides(
+    path: Path,
+    num_samples: int | None,
+    seed: int | None,
+    disable_trend: bool,
+    disable_seasonality: bool,
+    disable_noise: bool,
+    disable_causal: bool,
+    disable_local_anomaly: bool,
+    disable_seasonal_anomaly: bool,
+):
     cfg = load_config(path)
-    if num_samples is None and seed is None:
+    has_toggle = any(
+        [
+            disable_trend,
+            disable_seasonality,
+            disable_noise,
+            disable_causal,
+            disable_local_anomaly,
+            disable_seasonal_anomaly,
+        ]
+    )
+    if num_samples is None and seed is None and not has_toggle:
         return cfg
 
     raw = dict(cfg.raw)
@@ -24,6 +44,23 @@ def _cfg_from_overrides(path: Path, num_samples: int | None, seed: int | None):
         raw["num_samples"] = int(num_samples)
     if seed is not None:
         raw["seed"] = int(seed)
+
+    debug = dict(raw.get("debug", {}))
+    if disable_trend:
+        debug["enable_trend"] = False
+    if disable_seasonality:
+        debug["enable_seasonality"] = False
+    if disable_noise:
+        debug["enable_noise"] = False
+    if disable_causal:
+        debug["enable_causal"] = False
+    if disable_local_anomaly:
+        debug["enable_local_anomaly"] = False
+    if disable_seasonal_anomaly:
+        debug["enable_seasonal_anomaly"] = False
+    if debug:
+        raw["debug"] = debug
+
     return load_config_from_raw(raw)
 
 
@@ -33,10 +70,26 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("outputs"), help="Output directory")
     parser.add_argument("--num-samples", type=int, default=None, help="Override config.num_samples")
     parser.add_argument("--seed", type=int, default=None, help="Override config.seed")
+    parser.add_argument("--disable-trend", action="store_true", help="Disable trend component")
+    parser.add_argument("--disable-seasonality", action="store_true", help="Disable seasonality component")
+    parser.add_argument("--disable-noise", action="store_true", help="Disable noise component")
+    parser.add_argument("--disable-causal", action="store_true", help="Disable causal ARX stage")
+    parser.add_argument("--disable-local-anomaly", action="store_true", help="Disable local anomaly injector")
+    parser.add_argument("--disable-seasonal-anomaly", action="store_true", help="Disable seasonal anomaly injector")
     parser.add_argument("--print-config", action="store_true", help="Print final merged config and exit")
     args = parser.parse_args()
 
-    cfg = _cfg_from_overrides(args.config, args.num_samples, args.seed)
+    cfg = _cfg_from_overrides(
+        path=args.config,
+        num_samples=args.num_samples,
+        seed=args.seed,
+        disable_trend=args.disable_trend,
+        disable_seasonality=args.disable_seasonality,
+        disable_noise=args.disable_noise,
+        disable_causal=args.disable_causal,
+        disable_local_anomaly=args.disable_local_anomaly,
+        disable_seasonal_anomaly=args.disable_seasonal_anomaly,
+    )
     if args.print_config:
         print(json.dumps(cfg.raw, ensure_ascii=False, indent=2))
         return

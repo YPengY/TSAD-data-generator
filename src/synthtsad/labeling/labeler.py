@@ -22,8 +22,11 @@ class LabelBuilder:
         graph,
         causal_state,
     ) -> dict[str, Any]:
-        t, d = x_anom.shape
-        point_mask = np.zeros((t, d), dtype=np.uint8)
+        _ = graph
+        _ = causal_state
+        t, _ = x_anom.shape
+        delta = np.abs(x_anom - x_normal)
+        point_mask = (delta > 1e-8).astype(np.uint8)
 
         root_to_nodes: dict[int, set[int]] = defaultdict(set)
         event_records: list[dict[str, Any]] = []
@@ -38,7 +41,11 @@ class LabelBuilder:
 
             if event.root_cause_node is not None:
                 root = int(event.root_cause_node)
-                root_to_nodes[root].update(event.affected_nodes)
+                window = point_mask[s:, :]
+                affected = np.where(np.sum(window, axis=0) > 0)[0].astype(int).tolist()
+                if not affected:
+                    affected = [node]
+                root_to_nodes[root].update(affected)
 
             event_records.append(event.to_dict())
 
