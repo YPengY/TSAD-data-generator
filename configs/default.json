@@ -72,6 +72,32 @@
           "min": 6,
           "max": 30
         }
+      },
+      "wavelet": {
+        "families": {
+          "morlet": 0.22,
+          "ricker": 0.2,
+          "haar": 0.14,
+          "gaus": 0.16,
+          "mexh": 0.14,
+          "shan": 0.14
+        },
+        "scale": {
+          "min": 0.08,
+          "max": 0.35
+        },
+        "shift": {
+          "min": 0.0,
+          "max": 1.0
+        },
+        "contrastive": {
+          "ratio": 0.25,
+          "params": [
+            "family",
+            "scale",
+            "shift"
+          ]
+        }
       }
     },
     "noise": {

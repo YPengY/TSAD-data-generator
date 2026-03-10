@@ -33,6 +33,11 @@ class Stage1Config:
     seasonal_amplitude: tuple[float, float]
     period_low: IntRange
     period_high: IntRange
+    wavelet_family_weights: dict[str, float]
+    wavelet_scale: tuple[float, float]
+    wavelet_shift: tuple[float, float]
+    wavelet_contrastive_ratio: float
+    wavelet_contrastive_params: list[str]
     volatility_windows: IntRange
     volatility_multiplier: tuple[float, float]
     noise_sigma: dict[str, float]
@@ -121,6 +126,22 @@ DEFAULT_CONFIG: dict[str, Any] = {
                 "low": {"min": 30, "max": 120},
                 "high": {"min": 6, "max": 30},
             },
+            "wavelet": {
+                "families": {
+                    "morlet": 0.22,
+                    "ricker": 0.20,
+                    "haar": 0.14,
+                    "gaus": 0.16,
+                    "mexh": 0.14,
+                    "shan": 0.14,
+                },
+                "scale": {"min": 0.08, "max": 0.35},
+                "shift": {"min": 0.0, "max": 1.0},
+                "contrastive": {
+                    "ratio": 0.25,
+                    "params": ["family", "scale", "shift"],
+                },
+            },
         },
         "noise": {
             "sigma": {
@@ -208,7 +229,35 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
     stage1_raw = raw["stage1"]
     trend_raw = stage1_raw["trend"]
     season_raw = stage1_raw["seasonality"]
+    wavelet_raw = season_raw["wavelet"]
+    contrastive_raw = wavelet_raw["contrastive"]
     noise_raw = stage1_raw["noise"]
+
+    wavelet_scale = (float(wavelet_raw["scale"]["min"]), float(wavelet_raw["scale"]["max"]))
+    if wavelet_scale[0] <= 0.0 or wavelet_scale[1] < wavelet_scale[0]:
+        raise ValueError(f"Invalid stage1.seasonality.wavelet.scale range: {wavelet_scale}")
+
+    wavelet_shift = (float(wavelet_raw["shift"]["min"]), float(wavelet_raw["shift"]["max"]))
+    if wavelet_shift[1] < wavelet_shift[0]:
+        raise ValueError(f"Invalid stage1.seasonality.wavelet.shift range: {wavelet_shift}")
+
+    wavelet_contrastive_ratio = float(contrastive_raw["ratio"])
+    if wavelet_contrastive_ratio < 0.0 or wavelet_contrastive_ratio > 1.0:
+        raise ValueError(
+            "stage1.seasonality.wavelet.contrastive.ratio must be in [0, 1], "
+            f"got {wavelet_contrastive_ratio}"
+        )
+
+    wavelet_contrastive_params = [str(v) for v in contrastive_raw["params"]]
+    allowed_contrastive_params = {"family", "scale", "shift"}
+    invalid_params = [v for v in wavelet_contrastive_params if v not in allowed_contrastive_params]
+    if invalid_params:
+        raise ValueError(
+            "stage1.seasonality.wavelet.contrastive.params contains unsupported values: "
+            f"{invalid_params}"
+        )
+    if not wavelet_contrastive_params:
+        raise ValueError("stage1.seasonality.wavelet.contrastive.params must not be empty")
 
     stage1 = Stage1Config(
         trend_change_points=ensure_int_range(trend_raw["change_points"], "stage1.trend.change_points"),
@@ -222,6 +271,11 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
         seasonal_amplitude=(float(season_raw["amplitude"]["min"]), float(season_raw["amplitude"]["max"])),
         period_low=ensure_int_range(season_raw["base_period"]["low"], "stage1.seasonality.base_period.low"),
         period_high=ensure_int_range(season_raw["base_period"]["high"], "stage1.seasonality.base_period.high"),
+        wavelet_family_weights=normalize_weights({str(k): float(v) for k, v in wavelet_raw["families"].items()}),
+        wavelet_scale=wavelet_scale,
+        wavelet_shift=wavelet_shift,
+        wavelet_contrastive_ratio=wavelet_contrastive_ratio,
+        wavelet_contrastive_params=wavelet_contrastive_params,
         volatility_windows=ensure_int_range(
             noise_raw["volatility_windows"],
             "stage1.noise.volatility_windows",
