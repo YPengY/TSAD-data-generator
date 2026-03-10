@@ -41,5 +41,33 @@ def ensure_int_range(raw: Mapping[str, int], name: str, min_value: int = 1) -> I
     return r
 
 
+def ensure_non_negative_int(value: int, name: str) -> int:
+    number = int(value)
+    if number < 0:
+        raise ValueError(f"{name} must be >= 0, got {number}")
+    return number
+
+
+def ensure_positive_int(value: int, name: str) -> int:
+    number = int(value)
+    if number <= 0:
+        raise ValueError(f"{name} must be > 0, got {number}")
+    return number
+
+
+def ensure_non_negative_float(value: float, name: str) -> float:
+    number = float(value)
+    if number < 0.0:
+        raise ValueError(f"{name} must be >= 0, got {number}")
+    return number
+
+
+def ensure_probability(value: float, name: str) -> float:
+    number = float(value)
+    if number < 0.0 or number > 1.0:
+        raise ValueError(f"{name} must be in [0, 1], got {number}")
+    return number
+
+
 def clamp_float(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))

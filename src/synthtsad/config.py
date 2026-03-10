@@ -5,7 +5,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .utils import IntRange, ensure_int_range, normalize_weights
+from .utils import (
+    IntRange,
+    ensure_int_range,
+    ensure_non_negative_float,
+    ensure_non_negative_int,
+    ensure_positive_int,
+    ensure_probability,
+    normalize_weights,
+)
 
 
 @dataclass(frozen=True)
@@ -259,16 +267,52 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
     if not wavelet_contrastive_params:
         raise ValueError("stage1.seasonality.wavelet.contrastive.params must not be empty")
 
+    seasonal_amplitude = (
+        float(season_raw["amplitude"]["min"]),
+        float(season_raw["amplitude"]["max"]),
+    )
+    if seasonal_amplitude[0] < 0.0 or seasonal_amplitude[1] < seasonal_amplitude[0]:
+        raise ValueError(
+            "Invalid stage1.seasonality.amplitude range: "
+            f"{seasonal_amplitude}"
+        )
+
+    volatility_multiplier = (
+        float(noise_raw["volatility_multiplier"]["min"]),
+        float(noise_raw["volatility_multiplier"]["max"]),
+    )
+    if volatility_multiplier[0] < 0.0 or volatility_multiplier[1] < volatility_multiplier[0]:
+        raise ValueError(
+            "Invalid stage1.noise.volatility_multiplier range: "
+            f"{volatility_multiplier}"
+        )
+
+    noise_sigma = {str(k): float(v) for k, v in noise_raw["sigma"].items()}
+    if not noise_sigma:
+        raise ValueError("stage1.noise.sigma must not be empty")
+    invalid_noise_sigma = {k: v for k, v in noise_sigma.items() if v < 0.0}
+    if invalid_noise_sigma:
+        raise ValueError(
+            "stage1.noise.sigma values must be >= 0, got "
+            f"{invalid_noise_sigma}"
+        )
+
     stage1 = Stage1Config(
         trend_change_points=ensure_int_range(trend_raw["change_points"], "stage1.trend.change_points"),
-        trend_slope_scale=float(trend_raw["slope_scale"]),
-        arima_noise_scale=float(trend_raw["arima_noise_scale"]),
-        arima_p_max=int(trend_raw["arima"]["p_max"]),
-        arima_q_max=int(trend_raw["arima"]["q_max"]),
+        trend_slope_scale=ensure_non_negative_float(trend_raw["slope_scale"], "stage1.trend.slope_scale"),
+        arima_noise_scale=ensure_non_negative_float(
+            trend_raw["arima_noise_scale"],
+            "stage1.trend.arima_noise_scale",
+        ),
+        arima_p_max=ensure_non_negative_int(trend_raw["arima"]["p_max"], "stage1.trend.arima.p_max"),
+        arima_q_max=ensure_non_negative_int(trend_raw["arima"]["q_max"], "stage1.trend.arima.q_max"),
         arima_d=ensure_int_range(trend_raw["arima"]["d"], "stage1.trend.arima.d"),
-        arima_coef_bound=float(trend_raw["arima"]["coef_bound"]),
+        arima_coef_bound=ensure_non_negative_float(
+            trend_raw["arima"]["coef_bound"],
+            "stage1.trend.arima.coef_bound",
+        ),
         seasonal_atoms=ensure_int_range(season_raw["atoms"], "stage1.seasonality.atoms"),
-        seasonal_amplitude=(float(season_raw["amplitude"]["min"]), float(season_raw["amplitude"]["max"])),
+        seasonal_amplitude=seasonal_amplitude,
         period_low=ensure_int_range(season_raw["base_period"]["low"], "stage1.seasonality.base_period.low"),
         period_high=ensure_int_range(season_raw["base_period"]["high"], "stage1.seasonality.base_period.high"),
         wavelet_family_weights=normalize_weights({str(k): float(v) for k, v in wavelet_raw["families"].items()}),
@@ -281,23 +325,27 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
             "stage1.noise.volatility_windows",
             min_value=0,
         ),
-        volatility_multiplier=(
-            float(noise_raw["volatility_multiplier"]["min"]),
-            float(noise_raw["volatility_multiplier"]["max"]),
-        ),
-        noise_sigma={k: float(v) for k, v in noise_raw["sigma"].items()},
+        volatility_multiplier=volatility_multiplier,
+        noise_sigma=noise_sigma,
     )
 
     causal_raw = raw["causal"]
+    alpha_i_min = ensure_probability(causal_raw["alpha_i_min"], "causal.alpha_i_min")
+    alpha_i_max = ensure_probability(causal_raw["alpha_i_max"], "causal.alpha_i_max")
+    if alpha_i_max < alpha_i_min:
+        raise ValueError(
+            "causal.alpha_i_max must be >= causal.alpha_i_min, "
+            f"got ({alpha_i_min}, {alpha_i_max})"
+        )
     causal = CausalConfig(
         num_nodes=ensure_int_range(causal_raw["num_nodes"], "causal.num_nodes"),
-        edge_density=float(causal_raw["edge_density"]),
-        max_lag=int(causal_raw["max_lag"]),
-        a_i_bound=float(causal_raw["a_i_bound"]),
-        bias_std=float(causal_raw["bias_std"]),
-        b_ij_std=float(causal_raw["b_ij_std"]),
-        alpha_i_min=float(causal_raw["alpha_i_min"]),
-        alpha_i_max=float(causal_raw["alpha_i_max"]),
+        edge_density=ensure_probability(causal_raw["edge_density"], "causal.edge_density"),
+        max_lag=ensure_non_negative_int(causal_raw["max_lag"], "causal.max_lag"),
+        a_i_bound=ensure_non_negative_float(causal_raw["a_i_bound"], "causal.a_i_bound"),
+        bias_std=ensure_non_negative_float(causal_raw["bias_std"], "causal.bias_std"),
+        b_ij_std=ensure_non_negative_float(causal_raw["b_ij_std"], "causal.b_ij_std"),
+        alpha_i_min=alpha_i_min,
+        alpha_i_max=alpha_i_max,
     )
 
     anomaly_raw = raw["anomaly"]
@@ -306,8 +354,11 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
         window_length=ensure_int_range(anomaly_raw["window_length"], "anomaly.window_length"),
         local_types=[str(v) for v in anomaly_raw["local_types"]],
         seasonal_types=[str(v) for v in anomaly_raw["seasonal_types"]],
-        p_endogenous=float(anomaly_raw["p_endogenous"]),
-        p_use_seasonal_injector=float(anomaly_raw["p_use_seasonal_injector"]),
+        p_endogenous=ensure_probability(anomaly_raw["p_endogenous"], "anomaly.p_endogenous"),
+        p_use_seasonal_injector=ensure_probability(
+            anomaly_raw["p_use_seasonal_injector"],
+            "anomaly.p_use_seasonal_injector",
+        ),
     )
 
     debug_raw = raw["debug"]
@@ -331,11 +382,17 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
         else:
             num_series = IntRange(1, 1)
 
+    if num_series.min < causal.num_nodes.min or num_series.max > causal.num_nodes.max:
+        raise ValueError(
+            "num_series range must stay within causal.num_nodes range, "
+            f"got num_series={num_series} and causal.num_nodes={causal.num_nodes}"
+        )
+
     return GeneratorConfig(
         raw=raw,
-        num_samples=int(raw["num_samples"]),
+        num_samples=ensure_positive_int(raw["num_samples"], "num_samples"),
         sequence_length=ensure_int_range(raw["sequence_length"], "sequence_length"),
-        anomaly_sample_ratio=float(raw["anomaly_sample_ratio"]),
+        anomaly_sample_ratio=ensure_probability(raw["anomaly_sample_ratio"], "anomaly_sample_ratio"),
         num_series=num_series,
         seed=int(raw["seed"]) if raw.get("seed") is not None else None,
         weights=weights,

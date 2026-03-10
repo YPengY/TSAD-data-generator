@@ -43,7 +43,6 @@ class SyntheticGeneratorPipeline:
     def _sample_dimensions(self, rng: np.random.Generator) -> tuple[int, int]:
         n = self.config.sequence_length.sample(rng)
         d = self.config.num_series.sample(rng)
-        d = int(np.clip(d, self.config.causal.num_nodes.min, self.config.causal.num_nodes.max))
         return n, d
 
     def _sample_stage1_params(self, n: int, d: int, rng: np.random.Generator) -> list[dict[str, Any]]:

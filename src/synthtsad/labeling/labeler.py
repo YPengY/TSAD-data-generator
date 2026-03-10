@@ -26,7 +26,8 @@ class LabelBuilder:
         _ = causal_state
         t, _ = x_anom.shape
         delta = np.abs(x_anom - x_normal)
-        point_mask = (delta > 1e-8).astype(np.uint8)
+        delta_mask = (delta > 1e-8).astype(np.uint8)
+        point_mask = delta_mask.copy()
 
         root_to_nodes: dict[int, set[int]] = defaultdict(set)
         event_records: list[dict[str, Any]] = []
@@ -37,17 +38,22 @@ class LabelBuilder:
             if s >= e:
                 continue
             node = int(event.node)
+            if node < 0 or node >= point_mask.shape[1]:
+                continue
             point_mask[s:e, node] = 1
+
+            affected_nodes = {int(v) for v in event.affected_nodes}
+            affected_nodes.add(node)
+            affected_nodes.update(np.where(np.any(delta_mask[s:e, :], axis=0))[0].astype(int).tolist())
+            affected = sorted(affected_nodes)
 
             if event.root_cause_node is not None:
                 root = int(event.root_cause_node)
-                window = point_mask[s:, :]
-                affected = np.where(np.sum(window, axis=0) > 0)[0].astype(int).tolist()
-                if not affected:
-                    affected = [node]
                 root_to_nodes[root].update(affected)
 
-            event_records.append(event.to_dict())
+            event_record = event.to_dict()
+            event_record["affected_nodes"] = affected
+            event_records.append(event_record)
 
         point_mask_any = (np.sum(point_mask, axis=1) > 0).astype(np.uint8)
         root_cause_nodes = sorted(root_to_nodes.keys())

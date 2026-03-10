@@ -34,7 +34,8 @@ The workflow is parameter-first: it samples parameters first, then realizes fina
 - `src/synthtsad/anomaly/*`: Stage 3 modules.
 - `src/synthtsad/labeling/labeler.py`: Stage 4 labels.
 - `src/synthtsad/io/writer.py`: output writer.
-- `tests/*`: smoke and behavior tests.
+- `tests/test_*.py`: pytest unit, regression, and smoke tests.
+- `tests/*_console.py`: manual console debugging helpers, excluded from pytest collection.
 
 ## Environment Setup (Windows)
 
@@ -101,3 +102,5 @@ For each sample, two files are generated:
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
 ```
+
+Pytest ignores the `tests/*_console.py` debugging helpers and only runs the actual automated test files.
