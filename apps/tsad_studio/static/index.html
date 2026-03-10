@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TSAD Studio</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">TSAD Studio</p>
+          <h1>Interactive Config and Sample Preview</h1>
+          <p class="subtle">Isolated workspace for parameter editing, randomization, and in-memory visualization.</p>
+        </div>
+        <div class="toolbar">
+          <button id="restore-defaults" class="secondary">Restore Defaults</button>
+          <button id="randomize-config" class="secondary">Random Fill All</button>
+          <button id="preview-sample" class="primary">Preview Sample</button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside class="config-panel">
+          <div class="panel-header">
+            <h2>Parameters</h2>
+            <p class="subtle">Every config field is editable. Labels show both a readable name and the config path.</p>
+          </div>
+          <div id="status-banner" class="status hidden"></div>
+          <div id="config-form" class="form-tree"></div>
+        </aside>
+
+        <section class="preview-panel">
+          <div class="preview-header">
+            <div>
+              <h2>Sample Preview</h2>
+              <p class="subtle">Preview runs in memory and does not write files to <code>outputs/</code>.</p>
+            </div>
+            <div id="summary-chips" class="summary-chips"></div>
+          </div>
+
+          <div class="preview-tabs">
+            <button class="tab active" data-tab="series">Series</button>
+            <button class="tab" data-tab="mask">Mask</button>
+            <button class="tab" data-tab="dag">DAG</button>
+            <button class="tab" data-tab="metadata">Metadata</button>
+          </div>
+
+          <div id="tab-series" class="tab-panel active">
+            <div class="panel-controls">
+              <label>
+                Dataset
+                <select id="dataset-select">
+                  <option value="observed">Final Observed</option>
+                  <option value="stage2_normal">Stage2 Normal</option>
+                  <option value="stage1_baseline">Stage1 Baseline</option>
+                </select>
+              </label>
+              <label>
+                Max Nodes
+                <select id="max-nodes-select">
+                  <option value="1">1</option>
+                  <option value="3">3</option>
+                  <option value="6" selected>6</option>
+                  <option value="12">12</option>
+                  <option value="20">20</option>
+                </select>
+              </label>
+            </div>
+            <div id="node-selector" class="node-selector"></div>
+            <canvas id="series-canvas" width="980" height="420"></canvas>
+          </div>
+
+          <div id="tab-mask" class="tab-panel">
+            <div class="panel-controls">
+              <p class="subtle">Binary point mask over time for selected nodes.</p>
+            </div>
+            <canvas id="mask-canvas" width="980" height="260"></canvas>
+          </div>
+
+          <div id="tab-dag" class="tab-panel">
+            <div class="panel-controls">
+              <p class="subtle">Arrow direction is parent → child.</p>
+            </div>
+            <svg id="dag-svg" viewBox="0 0 980 420" class="dag-svg"></svg>
+          </div>
+
+          <div id="tab-metadata" class="tab-panel">
+            <div class="metadata-grid">
+              <section>
+                <h3>Events</h3>
+                <div id="events-table"></div>
+              </section>
+              <section>
+                <h3>Raw Metadata</h3>
+                <pre id="metadata-json" class="json-box"></pre>
+              </section>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>

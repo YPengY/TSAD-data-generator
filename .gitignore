@@ -19,7 +19,11 @@ dist/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.hypothesis/
+.tox/
+.nox/
 .coverage
+.coverage.*
 coverage.xml
 htmlcov/
 
@@ -27,6 +31,14 @@ htmlcov/
 .tmp/
 .tmp_cli_config.json
 py_write_test.txt
+*.log
+*.tmp
+*.bak
+*.orig
+*.rej
+.cache/
+.ipynb_checkpoints/
+.python-version
 
 
 --*
