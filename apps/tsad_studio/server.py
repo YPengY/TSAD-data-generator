@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from studio_core import get_bootstrap_payload, preview_sample, randomize_config
+from studio_core import get_bootstrap_payload, import_config_text, preview_sample, randomize_config
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -37,6 +37,9 @@ class StudioRequestHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/preview":
             self._handle_preview()
             return
+        if parsed.path == "/api/import-config":
+            self._handle_import_config()
+            return
         self._write_json(HTTPStatus.NOT_FOUND, {"error": f"Unknown endpoint: {parsed.path}"})
 
     def _handle_randomize(self) -> None:
@@ -56,6 +59,16 @@ class StudioRequestHandler(SimpleHTTPRequestHandler):
                 raise ValueError("Expected JSON object with 'config'.")
             preview = preview_sample(body["config"])
             self._write_json(HTTPStatus.OK, {"preview": preview})
+        except Exception as exc:
+            self._write_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+
+    def _handle_import_config(self) -> None:
+        try:
+            body = self._read_json_body(optional=False)
+            if not isinstance(body, dict) or "text" not in body:
+                raise ValueError("Expected JSON object with 'text'.")
+            payload = import_config_text(str(body["text"]))
+            self._write_json(HTTPStatus.OK, payload)
         except Exception as exc:
             self._write_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
 

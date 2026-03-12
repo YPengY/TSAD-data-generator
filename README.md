@@ -19,7 +19,8 @@ The workflow is parameter-first: it samples parameters first, then realizes fina
 - Seasonality types: none, sine, square, triangle, wavelet-like atoms.
 - Noise with optional piecewise volatility bursts.
 - Causal graph sampling (DAG) and ARX simulation.
-- Local anomalies (spike/shift/shake/plateau) and seasonal anomalies.
+- Local anomalies with a broader archetype catalog (spikes, bursts, wide spikes, outliers, asymmetric transients, spike+level interactions).
+- Seasonal anomalies over the seasonal component (waveform transforms, harmonic edits, pulse geometry edits, wavelet atom edits).
 - Endogenous propagation over causal edges.
 - Output as NPZ + JSON per sample.
 

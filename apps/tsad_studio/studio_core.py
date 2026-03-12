@@ -19,7 +19,16 @@ from synthtsad.causal.dag import CausalGraphSampler
 from synthtsad.components.noise import render_noise
 from synthtsad.components.seasonality import render_seasonality
 from synthtsad.components.trend import render_trend
-from synthtsad.config import DEFAULT_CONFIG, load_config_from_raw
+from synthtsad.config import (
+    DEFAULT_CONFIG,
+    LEGACY_ANOMALY_KEYS,
+    LOCAL_NODE_POLICY_MODES,
+    LOCAL_TARGET_COMPONENTS,
+    SEASONAL_NODE_POLICY_MODES,
+    SEASONAL_TARGET_COMPONENTS,
+    load_config_from_raw,
+    migrate_legacy_config,
+)
 from synthtsad.labeling.labeler import LabelBuilder
 from synthtsad.pipeline import SyntheticGeneratorPipeline
 
@@ -503,12 +512,13 @@ FIELD_DESCRIPTIONS_ZH = {
     "enable_seasonal_anomaly": "是否启用季节异常采样和注入。",
 }
 
-SELECT_OPTIONS = {
-    "anomaly.local.defaults.target_component": ["observed"],
-    "anomaly.local.defaults.node_policy.mode": ["uniform"],
-    "anomaly.seasonal.defaults.target_component": ["seasonality"],
-    "anomaly.seasonal.defaults.node_policy.mode": ["seasonal_eligible", "uniform"],
-}
+def _build_select_options() -> dict[str, list[str]]:
+    return {
+        "anomaly.local.defaults.target_component": list(LOCAL_TARGET_COMPONENTS),
+        "anomaly.local.defaults.node_policy.mode": list(LOCAL_NODE_POLICY_MODES),
+        "anomaly.seasonal.defaults.target_component": list(SEASONAL_TARGET_COMPONENTS),
+        "anomaly.seasonal.defaults.node_policy.mode": list(SEASONAL_NODE_POLICY_MODES),
+    }
 
 
 def _build_multi_select_options(defaults: dict[str, Any]) -> dict[str, list[str]]:
@@ -610,6 +620,16 @@ def _merge_import_payload(default_node: Any, imported_node: Any) -> Any:
     return _to_jsonable(imported_node)
 
 
+def _collect_legacy_migration_notes(raw: dict[str, Any]) -> list[str]:
+    notes: list[str] = []
+    if "num_series" not in raw and "num_features" in raw:
+        notes.append("Upgraded legacy root fields num_features/multivariate_flag to num_series.")
+    anomaly = raw.get("anomaly")
+    if isinstance(anomaly, dict) and LEGACY_ANOMALY_KEYS & set(anomaly.keys()):
+        notes.append("Upgraded legacy anomaly fields to the formal nested Stage 3 schema.")
+    return notes
+
+
 def _pretty_label(path: str, locale: str = "en") -> str:
     path_overrides = PATH_LABEL_OVERRIDES_ZH if locale == "zh" else PATH_LABEL_OVERRIDES
     section_labels = SECTION_LABELS_ZH if locale == "zh" else SECTION_LABELS
@@ -678,13 +698,14 @@ def load_default_config_raw() -> dict[str, Any]:
 def get_bootstrap_payload() -> dict[str, Any]:
     defaults = load_default_config_raw()
     multi_select_options = _build_multi_select_options(defaults)
+    select_options = _build_select_options()
     return {
         "defaults": defaults,
         "ui": {
             "sectionLabels": SECTION_LABELS,
             "fieldLabels": FIELD_LABELS,
             "multiSelectOptions": multi_select_options,
-            "selectOptions": SELECT_OPTIONS,
+            "selectOptions": select_options,
             "numericBounds": _build_numeric_bounds(),
             "pathLabels": _build_locale_payload(defaults, locale="en")["pathLabels"],
             "pathDescriptions": _build_locale_payload(defaults, locale="en")["pathDescriptions"],
@@ -714,10 +735,15 @@ def import_config_text(text: str) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError("Imported config must be a JSON/YAML object.")
 
+    migration_notes = _collect_legacy_migration_notes(parsed)
+    parsed = migrate_legacy_config(parsed)
     defaults = load_default_config_raw()
     merged = _merge_import_payload(defaults, parsed)
     cfg = load_config_from_raw(merged)
-    return _to_jsonable(cfg.raw)
+    return {
+        "config": _to_jsonable(cfg.raw),
+        "migrationNotes": migration_notes,
+    }
 
 
 def randomize_config(seed: int | None = None) -> dict[str, Any]:

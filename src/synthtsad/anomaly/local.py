@@ -49,11 +49,11 @@ class LocalAnomalyInjector:
     def __init__(self, config: GeneratorConfig) -> None:
         self.config = config
 
-    def _local_config(self) -> dict[str, Any]:
+    def _local_config(self):
         return self.config.anomaly.local
 
-    def _placement_policy(self) -> dict[str, Any]:
-        return self.config.anomaly.defaults
+    def _placement_policy(self):
+        return self.config.anomaly.placement
 
     def _range_bounds(
         self,
@@ -117,7 +117,7 @@ class LocalAnomalyInjector:
         min_len: int | None = None,
         max_len: int | None = None,
     ) -> tuple[int, int]:
-        family_window = self._local_config()["defaults"]["window_length"]
+        family_window = self._local_config().window_length
         base_window = spec.get("window_length", family_window)
         base_min, base_max = self._range_bounds(base_window, integer=True)
         global_max = min(int(base_max), n)
@@ -251,16 +251,16 @@ class LocalAnomalyInjector:
     def _eligible_type_weights(self) -> dict[str, float]:
         local_cfg = self._local_config()
         weights: dict[str, float] = {}
-        for kind, spec in local_cfg["per_type"].items():
-            weight = float(local_cfg["type_weights"].get(kind, 0.0))
+        for kind, spec in local_cfg.per_type.items():
+            weight = float(local_cfg.type_weights.get(kind, 0.0))
             if spec.get("enabled", True) and weight > 0.0:
                 weights[kind] = weight
         return weights
 
     def _eligible_nodes(self, d: int) -> list[int]:
-        policy = self._local_config()["defaults"]["node_policy"]
+        policy = self._local_config().node_policy
         nodes = list(range(d))
-        allowed = policy.get("allowed_nodes")
+        allowed = policy.allowed_nodes
         if allowed is not None:
             allowed_set = {int(node) for node in allowed}
             nodes = [node for node in nodes if node in allowed_set]
@@ -275,11 +275,11 @@ class LocalAnomalyInjector:
         counts: dict[int, int],
     ) -> bool:
         policy = self._placement_policy()
-        if counts.get(node, 0) >= int(policy["max_events_per_node"]):
+        if counts.get(node, 0) >= int(policy.max_events_per_node):
             return False
-        if bool(policy["allow_overlap"]):
+        if bool(policy.allow_overlap):
             return True
-        min_gap = int(policy["min_gap"])
+        min_gap = int(policy.min_gap)
         for start, end in placements.get(node, []):
             if not (t_end + min_gap <= start or t_start >= end + min_gap):
                 return False
@@ -467,18 +467,18 @@ class LocalAnomalyInjector:
 
         placements: dict[int, list[tuple[int, int]]] = {node: [] for node in nodes}
         counts: dict[int, int] = {node: 0 for node in nodes}
-        event_count = local_cfg["budget"]["events_per_sample"].sample(rng)
+        event_count = local_cfg.events_per_sample.sample(rng)
 
         for _ in range(event_count):
             placed = False
             for _attempt in range(48):
                 kind = weighted_choice(rng, type_weights)
                 node = int(rng.choice(nodes))
-                spec = local_cfg["per_type"][kind]
+                spec = local_cfg.per_type[kind]
                 t_start, t_end, params = self._sample_template_spec(kind=kind, n=n, rng=rng, spec=spec)
                 if not self._can_place(node=node, t_start=t_start, t_end=t_end, placements=placements, counts=counts):
                     continue
-                endogenous_p = float(local_cfg["defaults"]["endogenous_p"])
+                endogenous_p = float(local_cfg.endogenous_p)
                 is_endogenous = bool(d > 1 and rng.random() < endogenous_p)
                 placements[node].append((t_start, t_end))
                 counts[node] += 1
@@ -493,7 +493,7 @@ class LocalAnomalyInjector:
                         root_cause_node=node if is_endogenous else None,
                         affected_nodes=[node],
                         family="local",
-                        target_component=str(local_cfg["defaults"]["target_component"]),
+                        target_component=str(local_cfg.target_component),
                     )
                 )
                 placed = True

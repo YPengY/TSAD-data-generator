@@ -202,7 +202,10 @@
           <div>
             <h2 id="import-modal-title" data-i18n="import.title">Import Config</h2>
             <p class="subtle" data-i18n="import.subtitle">
-              Paste a JSON or YAML config. The app will validate it and merge missing fields with defaults.
+              Paste a JSON or YAML config. The app validates the formal schema and fills missing fields from defaults.
+            </p>
+            <p class="schema-note" data-i18n="import.note">
+              Runtime now accepts only the formal schema. Studio import can still upgrade legacy root and Stage 3 keys before validation.
             </p>
           </div>
           <button id="close-import-modal" class="secondary modal-close" data-i18n="import.close">Close</button>

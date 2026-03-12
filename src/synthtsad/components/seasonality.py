@@ -14,6 +14,19 @@ def _triangle_wave(phase: np.ndarray) -> np.ndarray:
     return (2.0 / np.pi) * np.arcsin(np.sin(phase))
 
 
+def _square_wave(cycle: np.ndarray, duty_cycle: float) -> np.ndarray:
+    return np.where(cycle < duty_cycle, 1.0, -1.0)
+
+
+def _asymmetric_triangle_wave(cycle: np.ndarray, duty_cycle: float) -> np.ndarray:
+    duty = float(np.clip(duty_cycle, 1e-3, 1.0 - 1e-3))
+    rising = cycle < duty
+    values = np.empty_like(cycle, dtype=float)
+    values[rising] = -1.0 + 2.0 * cycle[rising] / duty
+    values[~rising] = 1.0 - 2.0 * (cycle[~rising] - duty) / max(1.0 - duty, 1e-3)
+    return values
+
+
 def _normalize_waveform(x: np.ndarray) -> np.ndarray:
     peak = float(np.max(np.abs(x))) if x.size else 0.0
     if peak < 1e-8:
@@ -100,22 +113,48 @@ def _sample_period(config: GeneratorConfig, rng: np.random.Generator) -> int:
     return period_range.sample(rng)
 
 
+def _base_atom(
+    atom_type: str,
+    amplitude: float,
+    period: float,
+    phase: float,
+) -> dict[str, object]:
+    atom: dict[str, object] = {
+        "type": atom_type,
+        "period": period,
+        "frequency": 1.0 / period,
+        "amplitude": amplitude,
+        "phase": phase,
+        "modulation_depth": 0.0,
+        "modulation_frequency": 0.0,
+        "modulation_phase": 0.0,
+    }
+    if atom_type in {"square", "triangle"}:
+        atom["duty_cycle"] = 0.5
+        atom["cycle_shift"] = 0.0
+    return atom
+
+
 def _sample_wavelet_atom_base(config: GeneratorConfig, rng: np.random.Generator) -> WaveletAtom:
     amp_min, amp_max = config.stage1.seasonal_amplitude
     period = float(_sample_period(config, rng))
     family = weighted_choice(rng, config.stage1.wavelet_family_weights)
     theta = _sample_wavelet_theta(family, rng)
-    return {
-        "type": "wavelet",
-        "period": period,
-        "frequency": 1.0 / period,
-        "amplitude": float(rng.uniform(amp_min, amp_max)),
-        "phase": float(rng.uniform(0.0, 2.0 * np.pi)),
-        "family": family,
-        "scale": float(rng.uniform(*config.stage1.wavelet_scale)),
-        "shift": float(rng.uniform(*config.stage1.wavelet_shift)),
-        "theta": theta,
-    }
+    atom = _base_atom(
+        atom_type="wavelet",
+        amplitude=float(rng.uniform(amp_min, amp_max)),
+        period=period,
+        phase=float(rng.uniform(0.0, 2.0 * np.pi)),
+    )
+    atom.update(
+        {
+            "family": family,
+            "scale": float(rng.uniform(*config.stage1.wavelet_scale)),
+            "shift": float(rng.uniform(*config.stage1.wavelet_shift)),
+            "theta": theta,
+        }
+    )
+    return atom
 
 
 def _sample_contrastive_variant(
@@ -177,13 +216,12 @@ def sample_seasonality_params(n: int, config: GeneratorConfig, rng: np.random.Ge
         for _ in range(k_atoms):
             period = float(_sample_period(config, rng))
             atoms.append(
-                {
-                    "type": season_type,
-                    "period": period,
-                    "frequency": 1.0 / period,
-                    "amplitude": float(rng.uniform(amp_min, amp_max)),
-                    "phase": float(rng.uniform(0.0, 2.0 * np.pi)),
-                }
+                _base_atom(
+                    atom_type=season_type,
+                    amplitude=float(rng.uniform(amp_min, amp_max)),
+                    period=period,
+                    phase=float(rng.uniform(0.0, 2.0 * np.pi)),
+                )
             )
         return {"seasonality_type": season_type, "atoms": atoms}
 
@@ -224,13 +262,24 @@ def render_seasonality(t: np.ndarray, params: SeasonalParams) -> np.ndarray:
         freq = float(atom["frequency"])
         amplitude = float(atom["amplitude"])
         phase = float(atom["phase"])
+        mod_depth = float(atom.get("modulation_depth", 0.0))
+        mod_freq = float(atom.get("modulation_frequency", 0.0))
+        mod_phase = float(atom.get("modulation_phase", 0.0))
+        modulation = 1.0 + mod_depth * np.sin(2.0 * np.pi * mod_freq * t + mod_phase)
+        effective_amplitude = amplitude * modulation
 
         if atom_type == "sine":
             base = np.sin(2.0 * np.pi * freq * t + phase)
         elif atom_type == "square":
-            base = np.sign(np.sin(2.0 * np.pi * freq * t + phase))
+            cycle_shift = float(atom.get("cycle_shift", 0.0))
+            duty_cycle = float(atom.get("duty_cycle", 0.5))
+            cycle = ((freq * t) + phase / (2.0 * np.pi) - cycle_shift) % 1.0
+            base = _square_wave(cycle=cycle, duty_cycle=duty_cycle)
         elif atom_type == "triangle":
-            base = _triangle_wave(2.0 * np.pi * freq * t + phase)
+            cycle_shift = float(atom.get("cycle_shift", 0.0))
+            duty_cycle = float(atom.get("duty_cycle", 0.5))
+            cycle = ((freq * t) + phase / (2.0 * np.pi) - cycle_shift) % 1.0
+            base = _asymmetric_triangle_wave(cycle=cycle, duty_cycle=duty_cycle)
         else:
             period = float(atom["period"])
             family = str(atom.get("family", "morlet"))
@@ -248,7 +297,7 @@ def render_seasonality(t: np.ndarray, params: SeasonalParams) -> np.ndarray:
                 theta={str(k): float(v) for k, v in theta_dict.items()},
             )
 
-        signal += amplitude * base
+        signal += effective_amplitude * base
 
     return signal
 

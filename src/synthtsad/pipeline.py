@@ -109,10 +109,18 @@ class SyntheticGeneratorPipeline:
                 if self.config.debug.enable_local_anomaly:
                     sampled_local_events = local_injector.sample_events(n=n, d=d, rng=rng, graph=graph)
                 if self.config.debug.enable_seasonal_anomaly:
-                    sampled_seasonal_events = seasonal_injector.sample_events(n=n, d=d, rng=rng)
+                    sampled_seasonal_events = seasonal_injector.sample_events(
+                        n=n,
+                        d=d,
+                        rng=rng,
+                        stage1_params=stage1_params,
+                    )
 
             if not self.config.debug.enable_causal:
                 for event in sampled_local_events:
+                    event.is_endogenous = False
+                    event.root_cause_node = None
+                for event in sampled_seasonal_events:
                     event.is_endogenous = False
                     event.root_cause_node = None
 
@@ -153,6 +161,10 @@ class SyntheticGeneratorPipeline:
                     x_input=x_observed,
                     events=sampled_seasonal_events,
                     rng=rng,
+                    t=t,
+                    stage1_params=stage1_params,
+                    arx=arx if self.config.debug.enable_causal else None,
+                    arx_params=arx_params if self.config.debug.enable_causal else None,
                 )
                 realized_events.extend(seasonal_events)
 

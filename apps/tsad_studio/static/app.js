@@ -34,11 +34,12 @@ const LOCALE_TEXT = {
     "metadata.metric.propagation": "Propagation",
     "metadata.metric.target": "Target component",
     "import.title": "Import Config",
-    "import.subtitle": "Paste a JSON or YAML config. The app will validate it and merge missing fields with defaults.",
+    "import.subtitle": "Paste a JSON or YAML config. The app validates the formal schema and fills missing fields from defaults.",
+    "import.note": "Runtime now accepts only the formal schema. Studio import can still upgrade legacy root and Stage 3 keys before validation.",
     "import.close": "Close",
     "import.apply": "Apply Imported Config",
     "import.placeholder":
-      "{\n  \"seed\": 17,\n  \"sequence_length\": {\"min\": 256, \"max\": 256},\n  \"anomaly\": {\n    \"local\": {\n      \"budget\": {\"events_per_sample\": {\"min\": 2, \"max\": 3}},\n      \"defaults\": {\"endogenous_p\": 0.65}\n    }\n  }\n}",
+      "{\n  \"seed\": 17,\n  \"sequence_length\": {\"min\": 256, \"max\": 256},\n  \"anomaly\": {\n    \"defaults\": {\"min_gap\": 2},\n    \"local\": {\n      \"budget\": {\"events_per_sample\": {\"min\": 2, \"max\": 3}},\n      \"defaults\": {\"endogenous_p\": 0.65}\n    }\n  }\n}",
     "common.enabled": "Enabled",
     "common.yes": "Yes",
     "common.no": "No",
@@ -59,6 +60,7 @@ const LOCALE_TEXT = {
     "status.previewed": "Preview updated.",
     "status.importing": "Importing and validating config...",
     "status.imported": "Imported config applied.",
+    "status.importedMigrated": "Imported config applied. Legacy keys were upgraded to the formal schema.",
     "status.previewEmpty": "Generate a preview to inspect events and metadata.",
     "status.layerEmpty": "Run a preview to inspect stage outputs and dataset stats.",
     "status.eventsEmpty": "No realized events for this preview.",
@@ -536,7 +538,12 @@ function bindEvents() {
       }
       replaceConfig(payload.config);
       closeImportModal();
-      setStatus(t("status.imported"), "ok");
+      const migrationNotes = Array.isArray(payload.migrationNotes) ? payload.migrationNotes : [];
+      const importedMessage = migrationNotes.length ? t("status.importedMigrated") : t("status.imported");
+      setStatus(
+        migrationNotes.length ? `${importedMessage} ${migrationNotes.join(" ")}` : importedMessage,
+        "ok",
+      );
     } catch (error) {
       if (requestId !== state.requestIds.importConfig) {
         return;

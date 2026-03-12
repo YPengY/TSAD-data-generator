@@ -52,10 +52,46 @@ class Stage1Config:
 
 
 @dataclass(frozen=True)
+class NodePolicyConfig:
+    mode: str
+    allowed_nodes: tuple[int, ...] | None
+
+
+@dataclass(frozen=True)
+class AnomalyPlacementConfig:
+    allow_overlap: bool
+    min_gap: int
+    max_events_per_node: int
+
+
+@dataclass(frozen=True)
+class LocalAnomalyFamilyConfig:
+    events_per_sample: IntRange
+    window_length: IntRange
+    endogenous_p: float
+    target_component: str
+    node_policy: NodePolicyConfig
+    type_weights: dict[str, float]
+    per_type: dict[str, dict[str, Any]]
+
+
+@dataclass(frozen=True)
+class SeasonalAnomalyFamilyConfig:
+    activation_p: float
+    events_per_sample: IntRange
+    window_length: IntRange
+    endogenous_p: float
+    target_component: str
+    node_policy: NodePolicyConfig
+    type_weights: dict[str, float]
+    per_type: dict[str, dict[str, Any]]
+
+
+@dataclass(frozen=True)
 class AnomalyConfig:
-    defaults: dict[str, Any]
-    local: dict[str, Any]
-    seasonal: dict[str, Any]
+    placement: AnomalyPlacementConfig
+    local: LocalAnomalyFamilyConfig
+    seasonal: SeasonalAnomalyFamilyConfig
 
 
 @dataclass(frozen=True)
@@ -138,6 +174,59 @@ SEASONAL_ANOMALY_TYPES: list[str] = [
     "add_wavelet",
     "remove_wavelet",
 ]
+
+ROOT_CONFIG_KEYS: set[str] = {
+    "num_samples",
+    "sequence_length",
+    "anomaly_sample_ratio",
+    "num_series",
+    "seed",
+    "weights",
+    "stage1",
+    "causal",
+    "anomaly",
+    "debug",
+}
+WEIGHTS_KEYS: set[str] = {"seasonality_type", "trend_type", "frequency_regime", "noise_level"}
+STAGE1_KEYS: set[str] = {"trend", "seasonality", "noise"}
+TREND_KEYS: set[str] = {"change_points", "slope_scale", "arima_noise_scale", "arima"}
+TREND_ARIMA_KEYS: set[str] = {"p_max", "q_max", "d", "coef_bound"}
+SEASONAL_KEYS: set[str] = {"atoms", "amplitude", "base_period", "wavelet"}
+BASE_PERIOD_KEYS: set[str] = {"low", "high"}
+WAVELET_KEYS: set[str] = {"families", "scale", "shift", "contrastive"}
+CONTRASTIVE_KEYS: set[str] = {"ratio", "params"}
+NOISE_KEYS: set[str] = {"sigma", "volatility_windows", "volatility_multiplier"}
+CAUSAL_KEYS: set[str] = {"num_nodes", "edge_density", "max_lag", "a_i_bound", "bias_std", "b_ij_std", "alpha_i_min", "alpha_i_max"}
+DEBUG_KEYS: set[str] = {
+    "enable_trend",
+    "enable_seasonality",
+    "enable_noise",
+    "enable_causal",
+    "enable_local_anomaly",
+    "enable_seasonal_anomaly",
+}
+ANOMALY_ROOT_KEYS: set[str] = {"defaults", "local", "seasonal"}
+ANOMALY_PLACEMENT_KEYS: set[str] = {"allow_overlap", "min_gap", "max_events_per_node"}
+ANOMALY_BUDGET_KEYS: set[str] = {"events_per_sample"}
+LOCAL_ANOMALY_KEYS: set[str] = {"budget", "defaults", "type_weights", "per_type"}
+SEASONAL_ANOMALY_KEYS: set[str] = {"activation_p", "budget", "defaults", "type_weights", "per_type"}
+LOCAL_DEFAULT_KEYS: set[str] = {"window_length", "endogenous_p", "target_component", "node_policy"}
+SEASONAL_DEFAULT_KEYS: set[str] = {"window_length", "endogenous_p", "target_component", "node_policy"}
+NODE_POLICY_KEYS: set[str] = {"mode", "allowed_nodes"}
+LOCAL_TARGET_COMPONENTS: tuple[str, ...] = ("observed",)
+SEASONAL_TARGET_COMPONENTS: tuple[str, ...] = ("seasonality",)
+LOCAL_NODE_POLICY_MODES: tuple[str, ...] = ("uniform",)
+SEASONAL_NODE_POLICY_MODES: tuple[str, ...] = ("seasonal_eligible", "uniform")
+LEGACY_ANOMALY_KEYS: set[str] = {
+    "events_per_sample",
+    "seasonal_events_per_sample",
+    "window_length",
+    "local_types",
+    "seasonal_types",
+    "p_endogenous",
+    "p_endogenous_seasonal",
+    "p_use_seasonal_injector",
+}
 
 
 def _default_local_type_weights() -> dict[str, float]:
@@ -645,9 +734,17 @@ def _ensure_non_negative_weight_map(
     return normalized
 
 
-def _normalize_node_policy(raw: Any, name: str, allowed_modes: set[str]) -> dict[str, Any]:
+def _ensure_allowed_keys(raw: Any, name: str, allowed_keys: set[str]) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValueError(f"{name} must be a mapping")
+    extras = set(raw.keys()) - allowed_keys
+    if extras:
+        raise ValueError(f"{name} contains unsupported keys: {sorted(extras)}")
+    return raw
+
+
+def _normalize_node_policy(raw: Any, name: str, allowed_modes: set[str]) -> dict[str, Any]:
+    raw = _ensure_allowed_keys(raw, name, NODE_POLICY_KEYS)
     mode = str(raw.get("mode", "uniform"))
     if mode not in allowed_modes:
         raise ValueError(f"{name}.mode must be one of {sorted(allowed_modes)}, got {mode}")
@@ -737,7 +834,7 @@ def _copy_legacy_window_length(target: dict[str, Any], window_length: Any) -> No
             spec["window_length"] = window_length
 
 
-def _normalize_anomaly_schema(raw: Any) -> dict[str, Any]:
+def _migrate_legacy_anomaly_schema(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ValueError("anomaly must be a mapping")
 
@@ -765,7 +862,67 @@ def _normalize_anomaly_schema(raw: Any) -> dict[str, Any]:
     return normalized
 
 
+def migrate_legacy_config(raw: dict[str, Any]) -> dict[str, Any]:
+    migrated = json.loads(json.dumps(raw))
+    if "num_features" in migrated and "num_series" not in migrated:
+        multivariate = bool(migrated.get("multivariate_flag", True))
+        migrated["num_series"] = migrated["num_features"] if multivariate else {"min": 1, "max": 1}
+    if "num_features" in migrated:
+        migrated.pop("num_features", None)
+    if "multivariate_flag" in migrated:
+        migrated.pop("multivariate_flag", None)
+    if "anomaly" in migrated and isinstance(migrated["anomaly"], dict):
+        anomaly_raw = migrated["anomaly"]
+        if LEGACY_ANOMALY_KEYS & set(anomaly_raw.keys()):
+            migrated["anomaly"] = _migrate_legacy_anomaly_schema(anomaly_raw)
+    return migrated
+
+
+def _normalize_anomaly_schema(raw: Any) -> dict[str, Any]:
+    raw = _ensure_allowed_keys(raw, "anomaly", ANOMALY_ROOT_KEYS)
+
+    normalized = json.loads(json.dumps(_default_anomaly_config()))
+    if "defaults" in raw:
+        defaults_raw = _ensure_allowed_keys(raw["defaults"], "anomaly.defaults", ANOMALY_PLACEMENT_KEYS)
+        normalized["defaults"] = _deep_merge(normalized["defaults"], defaults_raw)
+    if "local" in raw:
+        local_raw = _ensure_allowed_keys(raw["local"], "anomaly.local", LOCAL_ANOMALY_KEYS)
+        if "budget" in local_raw:
+            _ensure_allowed_keys(local_raw["budget"], "anomaly.local.budget", ANOMALY_BUDGET_KEYS)
+        if "defaults" in local_raw:
+            defaults_raw = _ensure_allowed_keys(local_raw["defaults"], "anomaly.local.defaults", LOCAL_DEFAULT_KEYS)
+            if "node_policy" in defaults_raw:
+                _ensure_allowed_keys(defaults_raw["node_policy"], "anomaly.local.defaults.node_policy", NODE_POLICY_KEYS)
+        normalized["local"] = _deep_merge(normalized["local"], local_raw)
+    if "seasonal" in raw:
+        seasonal_raw = _ensure_allowed_keys(raw["seasonal"], "anomaly.seasonal", SEASONAL_ANOMALY_KEYS)
+        if "budget" in seasonal_raw:
+            _ensure_allowed_keys(seasonal_raw["budget"], "anomaly.seasonal.budget", ANOMALY_BUDGET_KEYS)
+        if "defaults" in seasonal_raw:
+            defaults_raw = _ensure_allowed_keys(seasonal_raw["defaults"], "anomaly.seasonal.defaults", SEASONAL_DEFAULT_KEYS)
+            if "node_policy" in defaults_raw:
+                _ensure_allowed_keys(defaults_raw["node_policy"], "anomaly.seasonal.defaults.node_policy", NODE_POLICY_KEYS)
+        normalized["seasonal"] = _deep_merge(normalized["seasonal"], seasonal_raw)
+    return normalized
+
+
 def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
+    _ensure_allowed_keys(raw, "config", ROOT_CONFIG_KEYS)
+    _ensure_allowed_keys(raw["weights"], "weights", WEIGHTS_KEYS)
+    _ensure_allowed_keys(raw["stage1"], "stage1", STAGE1_KEYS)
+    _ensure_allowed_keys(raw["stage1"]["trend"], "stage1.trend", TREND_KEYS)
+    _ensure_allowed_keys(raw["stage1"]["trend"]["arima"], "stage1.trend.arima", TREND_ARIMA_KEYS)
+    _ensure_allowed_keys(raw["stage1"]["seasonality"], "stage1.seasonality", SEASONAL_KEYS)
+    _ensure_allowed_keys(raw["stage1"]["seasonality"]["base_period"], "stage1.seasonality.base_period", BASE_PERIOD_KEYS)
+    _ensure_allowed_keys(raw["stage1"]["seasonality"]["wavelet"], "stage1.seasonality.wavelet", WAVELET_KEYS)
+    _ensure_allowed_keys(
+        raw["stage1"]["seasonality"]["wavelet"]["contrastive"],
+        "stage1.seasonality.wavelet.contrastive",
+        CONTRASTIVE_KEYS,
+    )
+    _ensure_allowed_keys(raw["stage1"]["noise"], "stage1.noise", NOISE_KEYS)
+    _ensure_allowed_keys(raw["causal"], "causal", CAUSAL_KEYS)
+    _ensure_allowed_keys(raw["debug"], "debug", DEBUG_KEYS)
     weights = {
         key: normalize_weights(raw["weights"][key])
         for key in ["seasonality_type", "trend_type", "frequency_regime", "noise_level"]
@@ -890,93 +1047,105 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
     local_raw = anomaly_raw["local"]
     seasonal_raw = anomaly_raw["seasonal"]
 
-    anomaly_defaults = {
-        "allow_overlap": bool(anomaly_defaults_raw["allow_overlap"]),
-        "min_gap": ensure_non_negative_int(anomaly_defaults_raw["min_gap"], "anomaly.defaults.min_gap"),
-        "max_events_per_node": ensure_positive_int(
+    placement = AnomalyPlacementConfig(
+        allow_overlap=bool(anomaly_defaults_raw["allow_overlap"]),
+        min_gap=ensure_non_negative_int(anomaly_defaults_raw["min_gap"], "anomaly.defaults.min_gap"),
+        max_events_per_node=ensure_positive_int(
             anomaly_defaults_raw["max_events_per_node"],
             "anomaly.defaults.max_events_per_node",
         ),
-    }
+    )
 
-    local = {
-        "budget": {
-            "events_per_sample": ensure_int_range(
-                local_raw["budget"]["events_per_sample"],
-                "anomaly.local.budget.events_per_sample",
-            )
-        },
-        "defaults": {
-            "window_length": ensure_int_range(
-                local_raw["defaults"]["window_length"],
-                "anomaly.local.defaults.window_length",
-                min_value=1,
-            ),
-            "endogenous_p": ensure_probability(
-                local_raw["defaults"]["endogenous_p"],
-                "anomaly.local.defaults.endogenous_p",
-            ),
-            "target_component": str(local_raw["defaults"]["target_component"]),
-            "node_policy": _normalize_node_policy(
-                local_raw["defaults"].get("node_policy", {"mode": "uniform"}),
-                "anomaly.local.defaults.node_policy",
-                {"uniform"},
-            ),
-        },
-        "type_weights": _ensure_non_negative_weight_map(
+    local_target_component = str(local_raw["defaults"]["target_component"])
+    if local_target_component not in LOCAL_TARGET_COMPONENTS:
+        raise ValueError(
+            "anomaly.local.defaults.target_component must be one of "
+            f"{list(LOCAL_TARGET_COMPONENTS)}, got {local_target_component}"
+        )
+    local_node_policy_raw = _normalize_node_policy(
+        local_raw["defaults"].get("node_policy", {"mode": LOCAL_NODE_POLICY_MODES[0]}),
+        "anomaly.local.defaults.node_policy",
+        set(LOCAL_NODE_POLICY_MODES),
+    )
+    local = LocalAnomalyFamilyConfig(
+        events_per_sample=ensure_int_range(
+            local_raw["budget"]["events_per_sample"],
+            "anomaly.local.budget.events_per_sample",
+        ),
+        window_length=ensure_int_range(
+            local_raw["defaults"]["window_length"],
+            "anomaly.local.defaults.window_length",
+            min_value=1,
+        ),
+        endogenous_p=ensure_probability(
+            local_raw["defaults"]["endogenous_p"],
+            "anomaly.local.defaults.endogenous_p",
+        ),
+        target_component=local_target_component,
+        node_policy=NodePolicyConfig(
+            mode=str(local_node_policy_raw["mode"]),
+            allowed_nodes=tuple(local_node_policy_raw["allowed_nodes"]) if local_node_policy_raw["allowed_nodes"] is not None else None,
+        ),
+        type_weights=_ensure_non_negative_weight_map(
             local_raw["type_weights"],
             "anomaly.local.type_weights",
             set(LOCAL_ANOMALY_TYPES),
         ),
-        "per_type": _normalize_type_specs(
+        per_type=_normalize_type_specs(
             local_raw["per_type"],
             "anomaly.local.per_type",
             LOCAL_ANOMALY_TYPES,
         ),
-    }
+    )
 
-    seasonal = {
-        "activation_p": ensure_probability(
+    seasonal_target_component = str(seasonal_raw["defaults"]["target_component"])
+    if seasonal_target_component not in SEASONAL_TARGET_COMPONENTS:
+        raise ValueError(
+            "anomaly.seasonal.defaults.target_component must be one of "
+            f"{list(SEASONAL_TARGET_COMPONENTS)}, got {seasonal_target_component}"
+        )
+    seasonal_node_policy_raw = _normalize_node_policy(
+        seasonal_raw["defaults"].get("node_policy", {"mode": SEASONAL_NODE_POLICY_MODES[0]}),
+        "anomaly.seasonal.defaults.node_policy",
+        set(SEASONAL_NODE_POLICY_MODES),
+    )
+    seasonal = SeasonalAnomalyFamilyConfig(
+        activation_p=ensure_probability(
             seasonal_raw["activation_p"],
             "anomaly.seasonal.activation_p",
         ),
-        "budget": {
-            "events_per_sample": ensure_int_range(
-                seasonal_raw["budget"]["events_per_sample"],
-                "anomaly.seasonal.budget.events_per_sample",
-            )
-        },
-        "defaults": {
-            "window_length": ensure_int_range(
-                seasonal_raw["defaults"]["window_length"],
-                "anomaly.seasonal.defaults.window_length",
-                min_value=1,
-            ),
-            "endogenous_p": ensure_probability(
-                seasonal_raw["defaults"]["endogenous_p"],
-                "anomaly.seasonal.defaults.endogenous_p",
-            ),
-            "target_component": str(seasonal_raw["defaults"]["target_component"]),
-            "node_policy": _normalize_node_policy(
-                seasonal_raw["defaults"].get("node_policy", {"mode": "seasonal_eligible"}),
-                "anomaly.seasonal.defaults.node_policy",
-                {"uniform", "seasonal_eligible"},
-            ),
-        },
-        "type_weights": _ensure_non_negative_weight_map(
+        events_per_sample=ensure_int_range(
+            seasonal_raw["budget"]["events_per_sample"],
+            "anomaly.seasonal.budget.events_per_sample",
+        ),
+        window_length=ensure_int_range(
+            seasonal_raw["defaults"]["window_length"],
+            "anomaly.seasonal.defaults.window_length",
+            min_value=1,
+        ),
+        endogenous_p=ensure_probability(
+            seasonal_raw["defaults"]["endogenous_p"],
+            "anomaly.seasonal.defaults.endogenous_p",
+        ),
+        target_component=seasonal_target_component,
+        node_policy=NodePolicyConfig(
+            mode=str(seasonal_node_policy_raw["mode"]),
+            allowed_nodes=tuple(seasonal_node_policy_raw["allowed_nodes"]) if seasonal_node_policy_raw["allowed_nodes"] is not None else None,
+        ),
+        type_weights=_ensure_non_negative_weight_map(
             seasonal_raw["type_weights"],
             "anomaly.seasonal.type_weights",
             set(SEASONAL_ANOMALY_TYPES),
         ),
-        "per_type": _normalize_type_specs(
+        per_type=_normalize_type_specs(
             seasonal_raw["per_type"],
             "anomaly.seasonal.per_type",
             SEASONAL_ANOMALY_TYPES,
         ),
-    }
+    )
 
     anomaly = AnomalyConfig(
-        defaults=anomaly_defaults,
+        placement=placement,
         local=local,
         seasonal=seasonal,
     )
@@ -991,16 +1160,7 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
         enable_seasonal_anomaly=bool(debug_raw["enable_seasonal_anomaly"]),
     )
 
-    if "num_series" in raw:
-        num_series = ensure_int_range(raw["num_series"], "num_series")
-    else:
-        if "num_features" not in raw:
-            raise ValueError("Config must define num_series (preferred) or legacy num_features.")
-        multivariate = bool(raw.get("multivariate_flag", True))
-        if multivariate:
-            num_series = ensure_int_range(raw["num_features"], "num_features")
-        else:
-            num_series = IntRange(1, 1)
+    num_series = ensure_int_range(raw["num_series"], "num_series")
 
     if num_series.min < causal.num_nodes.min or num_series.max > causal.num_nodes.max:
         raise ValueError(
@@ -1030,9 +1190,6 @@ def load_config(path: Path) -> GeneratorConfig:
 
 def load_config_from_raw(raw: dict[str, Any]) -> GeneratorConfig:
     incoming = json.loads(json.dumps(raw))
-    if "anomaly" in incoming:
-        incoming["anomaly"] = _normalize_anomaly_schema(incoming["anomaly"])
     merged = _deep_merge(DEFAULT_CONFIG, incoming)
     merged = json.loads(json.dumps(merged))
-    merged["anomaly"] = _normalize_anomaly_schema(merged["anomaly"])
     return _build_config(merged)

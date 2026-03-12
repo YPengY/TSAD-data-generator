@@ -21,9 +21,12 @@ http://127.0.0.1:8765
 - random-fills the entire config with a valid sampled setup
 - generates a single preview sample fully in memory
 - visualizes:
-  - Stage1 baseline
-  - Stage2 normal output
-  - final observed sample
+  - Stage1 components: trend, seasonality, noise, baseline
+  - Stage2 normal output and causal effect delta
+  - local anomaly deltas before/after causal mixing
+  - seasonal anomaly delta
+  - final observed sample and final anomaly delta
   - point mask
   - DAG
-  - realized events and metadata
+  - realized events with family / target component / endogenous metadata
+  - raw metadata and stage debug stats

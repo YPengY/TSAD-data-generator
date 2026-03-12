@@ -70,6 +70,17 @@ h3 {
   font-size: 12px;
 }
 
+.schema-note {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(201, 119, 73, 0.24);
+  background: rgba(201, 119, 73, 0.08);
+  color: #7b4326;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .toolbar {
   display: flex;
   gap: 10px;

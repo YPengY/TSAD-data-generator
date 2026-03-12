@@ -43,11 +43,11 @@ class SeasonalAnomalyInjector:
     def __init__(self, config: GeneratorConfig) -> None:
         self.config = config
 
-    def _seasonal_config(self) -> dict[str, Any]:
+    def _seasonal_config(self):
         return self.config.anomaly.seasonal
 
-    def _placement_policy(self) -> dict[str, Any]:
-        return self.config.anomaly.defaults
+    def _placement_policy(self):
+        return self.config.anomaly.placement
 
     def _range_bounds(
         self,
@@ -104,7 +104,7 @@ class SeasonalAnomalyInjector:
         return float(rng.uniform(float(low), float(high)))
 
     def _sample_window(self, n: int, rng: np.random.Generator, spec: dict[str, Any]) -> tuple[int, int]:
-        family_window = self._seasonal_config()["defaults"]["window_length"]
+        family_window = self._seasonal_config().window_length
         base_window = spec.get("window_length", family_window)
         min_len, max_len = self._range_bounds(base_window, integer=True)
         max_len = min(int(max_len), n)
@@ -128,9 +128,9 @@ class SeasonalAnomalyInjector:
             return []
 
         seasonal_cfg = self._seasonal_config()
-        type_weights = seasonal_cfg["type_weights"]
+        type_weights = seasonal_cfg.type_weights
         candidates: list[str] = []
-        for kind, spec in seasonal_cfg["per_type"].items():
+        for kind, spec in seasonal_cfg.per_type.items():
             if not spec.get("enabled", True) or float(type_weights.get(kind, 0.0)) <= 0.0:
                 continue
             applies_to = [str(value) for value in spec.get("applies_to", [])]
@@ -254,13 +254,13 @@ class SeasonalAnomalyInjector:
         d: int,
         stage1_params: list[dict[str, Any]],
     ) -> list[int]:
-        policy = self._seasonal_config()["defaults"]["node_policy"]
-        allowed = policy.get("allowed_nodes")
+        policy = self._seasonal_config().node_policy
+        allowed = policy.allowed_nodes
         allowed_set = {int(node) for node in allowed} if allowed is not None else None
         nodes = list(range(d))
         if allowed_set is not None:
             nodes = [node for node in nodes if node in allowed_set]
-        if policy.get("mode") == "seasonal_eligible":
+        if policy.mode == "seasonal_eligible":
             nodes = [
                 node
                 for node in nodes
@@ -278,11 +278,11 @@ class SeasonalAnomalyInjector:
         counts: dict[int, int],
     ) -> bool:
         policy = self._placement_policy()
-        if counts.get(node, 0) >= int(policy["max_events_per_node"]):
+        if counts.get(node, 0) >= int(policy.max_events_per_node):
             return False
-        if bool(policy["allow_overlap"]):
+        if bool(policy.allow_overlap):
             return True
-        min_gap = int(policy["min_gap"])
+        min_gap = int(policy.min_gap)
         for start, end in placements.get(node, []):
             if not (t_end + min_gap <= start or t_start >= end + min_gap):
                 return False
@@ -296,7 +296,7 @@ class SeasonalAnomalyInjector:
         stage1_params: list[dict[str, Any]] | None = None,
     ) -> list[AnomalyEvent]:
         seasonal_cfg = self._seasonal_config()
-        if d == 0 or stage1_params is None or rng.random() > float(seasonal_cfg["activation_p"]):
+        if d == 0 or stage1_params is None or rng.random() > float(seasonal_cfg.activation_p):
             return []
 
         nodes = self._eligible_nodes(d=d, stage1_params=stage1_params)
@@ -305,7 +305,7 @@ class SeasonalAnomalyInjector:
 
         placements: dict[int, list[tuple[int, int]]] = {node: [] for node in nodes}
         counts: dict[int, int] = {node: 0 for node in nodes}
-        count = seasonal_cfg["budget"]["events_per_sample"].sample(rng)
+        count = seasonal_cfg.events_per_sample.sample(rng)
         events: list[AnomalyEvent] = []
 
         for _ in range(count):
@@ -316,14 +316,14 @@ class SeasonalAnomalyInjector:
                 if not kinds:
                     continue
                 kind_weights = {
-                    kind: float(seasonal_cfg["type_weights"].get(kind, 0.0))
+                    kind: float(seasonal_cfg.type_weights.get(kind, 0.0))
                     for kind in kinds
-                    if float(seasonal_cfg["type_weights"].get(kind, 0.0)) > 0.0
+                    if float(seasonal_cfg.type_weights.get(kind, 0.0)) > 0.0
                 }
                 if not kind_weights:
                     continue
                 kind = weighted_choice(rng, kind_weights)
-                spec = seasonal_cfg["per_type"][kind]
+                spec = seasonal_cfg.per_type[kind]
                 t_start, t_end = self._sample_window(n, rng, spec=spec)
                 if not self._can_place(node=node, t_start=t_start, t_end=t_end, placements=placements, counts=counts):
                     continue
@@ -333,7 +333,7 @@ class SeasonalAnomalyInjector:
                     rng=rng,
                     spec=spec,
                 )
-                endogenous_p = float(seasonal_cfg["defaults"]["endogenous_p"])
+                endogenous_p = float(seasonal_cfg.endogenous_p)
                 is_endogenous = bool(d > 1 and rng.random() < endogenous_p)
                 placements[node].append((t_start, t_end))
                 counts[node] += 1
@@ -348,7 +348,7 @@ class SeasonalAnomalyInjector:
                         root_cause_node=node if is_endogenous else None,
                         affected_nodes=[node],
                         family="seasonal",
-                        target_component=str(seasonal_cfg["defaults"]["target_component"]),
+                        target_component=str(seasonal_cfg.target_component),
                     )
                 )
                 placed = True

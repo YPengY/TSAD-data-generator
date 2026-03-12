@@ -93,6 +93,16 @@ class ARXSystem:
 
         return x, ARXState(z=z, params=params)
 
+    def simulate_linear_response(
+        self,
+        x_base: np.ndarray,
+        n_steps: int,
+        params: dict[str, Any],
+    ) -> tuple[np.ndarray, ARXState]:
+        linear_params = dict(params)
+        linear_params["bias"] = [0.0 for _ in range(self.graph.num_nodes)]
+        return self.simulate_with_params(x_base=x_base, n_steps=n_steps, params=linear_params)
+
     def simulate_from_baseline(
         self,
         x_base: np.ndarray,
