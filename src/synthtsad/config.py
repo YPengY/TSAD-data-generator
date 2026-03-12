@@ -53,12 +53,9 @@ class Stage1Config:
 
 @dataclass(frozen=True)
 class AnomalyConfig:
-    events_per_sample: IntRange
-    window_length: IntRange
-    local_types: list[str]
-    seasonal_types: list[str]
-    p_endogenous: float
-    p_use_seasonal_injector: float
+    defaults: dict[str, Any]
+    local: dict[str, Any]
+    seasonal: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -84,6 +81,425 @@ class GeneratorConfig:
     causal: CausalConfig
     anomaly: AnomalyConfig
     debug: DebugConfig
+
+
+DEFAULT_WAVELET_FAMILY_WEIGHTS: dict[str, float] = {
+    "morlet": 0.22,
+    "ricker": 0.20,
+    "haar": 0.14,
+    "gaus": 0.16,
+    "mexh": 0.14,
+    "shan": 0.14,
+}
+
+LOCAL_ANOMALY_TYPES: list[str] = [
+    "upward_spike",
+    "downward_spike",
+    "continuous_upward_spikes",
+    "continuous_downward_spikes",
+    "wide_upward_spike",
+    "wide_downward_spike",
+    "outlier",
+    "sudden_increase",
+    "sudden_decrease",
+    "convex_plateau",
+    "concave_plateau",
+    "rapid_rise_slow_decline",
+    "slow_rise_rapid_decline",
+    "rapid_decline_slow_rise",
+    "slow_decline_rapid_rise",
+    "decrease_after_upward_spike",
+    "increase_after_downward_spike",
+    "increase_after_upward_spike",
+    "decrease_after_downward_spike",
+    "shake",
+    "plateau",
+]
+
+SEASONAL_ANOMALY_TYPES: list[str] = [
+    "waveform_inversion",
+    "amplitude_scaling",
+    "frequency_change",
+    "phase_shift",
+    "noise_injection",
+    "waveform_change",
+    "add_harmonic",
+    "remove_harmonic",
+    "modify_harmonic_phase",
+    "modify_modulation_depth",
+    "modify_modulation_frequency",
+    "modify_modulation_phase",
+    "pulse_shift",
+    "pulse_width_modulation",
+    "wavelet_family_change",
+    "wavelet_scale_change",
+    "wavelet_shift_change",
+    "wavelet_amplitude_change",
+    "add_wavelet",
+    "remove_wavelet",
+]
+
+
+def _default_local_type_weights() -> dict[str, float]:
+    return {
+        "upward_spike": 1.0,
+        "downward_spike": 1.0,
+        "continuous_upward_spikes": 0.8,
+        "continuous_downward_spikes": 0.8,
+        "wide_upward_spike": 0.6,
+        "wide_downward_spike": 0.6,
+        "outlier": 0.4,
+        "sudden_increase": 0.7,
+        "sudden_decrease": 0.7,
+        "convex_plateau": 0.5,
+        "concave_plateau": 0.5,
+        "rapid_rise_slow_decline": 0.5,
+        "slow_rise_rapid_decline": 0.5,
+        "rapid_decline_slow_rise": 0.5,
+        "slow_decline_rapid_rise": 0.5,
+        "decrease_after_upward_spike": 0.4,
+        "increase_after_downward_spike": 0.4,
+        "increase_after_upward_spike": 0.4,
+        "decrease_after_downward_spike": 0.4,
+        "shake": 0.3,
+        "plateau": 0.2,
+    }
+
+
+def _default_local_per_type() -> dict[str, dict[str, Any]]:
+    return {
+        "upward_spike": {
+            "enabled": True,
+            "window_length": {"min": 5, "max": 24},
+            "amplitude": {"min": 0.8, "max": 3.0},
+            "half_width": {"min": 1, "max": 6},
+        },
+        "downward_spike": {
+            "enabled": True,
+            "window_length": {"min": 5, "max": 24},
+            "amplitude": {"min": 0.8, "max": 3.0},
+            "half_width": {"min": 1, "max": 6},
+        },
+        "continuous_upward_spikes": {
+            "enabled": True,
+            "window_length": {"min": 10, "max": 48},
+            "spike_count": {"min": 2, "max": 5},
+            "stride": {"min": 1, "max": 8},
+            "amplitude": {"min": 0.6, "max": 2.4},
+            "half_width": {"min": 1, "max": 4},
+        },
+        "continuous_downward_spikes": {
+            "enabled": True,
+            "window_length": {"min": 10, "max": 48},
+            "spike_count": {"min": 2, "max": 5},
+            "stride": {"min": 1, "max": 8},
+            "amplitude": {"min": 0.6, "max": 2.4},
+            "half_width": {"min": 1, "max": 4},
+        },
+        "wide_upward_spike": {
+            "enabled": True,
+            "window_length": {"min": 8, "max": 40},
+            "amplitude": {"min": 0.8, "max": 3.0},
+            "rise_length": {"min": 1, "max": 10},
+            "fall_length": {"min": 1, "max": 10},
+        },
+        "wide_downward_spike": {
+            "enabled": True,
+            "window_length": {"min": 8, "max": 40},
+            "amplitude": {"min": 0.8, "max": 3.0},
+            "rise_length": {"min": 1, "max": 10},
+            "fall_length": {"min": 1, "max": 10},
+        },
+        "outlier": {
+            "enabled": True,
+            "amplitude": {"min": -3.0, "max": 3.0},
+            "min_abs_amplitude": 0.3,
+        },
+        "sudden_increase": {
+            "enabled": True,
+            "window_length": {"min": 6, "max": 80},
+            "amplitude": {"min": 0.8, "max": 3.0},
+            "kappa": {"min": 0.1, "max": 0.4},
+        },
+        "sudden_decrease": {
+            "enabled": True,
+            "window_length": {"min": 6, "max": 80},
+            "amplitude": {"min": 0.8, "max": 3.0},
+            "kappa": {"min": 0.1, "max": 0.4},
+        },
+        "convex_plateau": {
+            "enabled": True,
+            "window_length": {"min": 6, "max": 80},
+            "amplitude": {"min": 0.8, "max": 3.0},
+        },
+        "concave_plateau": {
+            "enabled": True,
+            "window_length": {"min": 6, "max": 80},
+            "amplitude": {"min": 0.8, "max": 3.0},
+        },
+        "plateau": {
+            "enabled": True,
+            "window_length": {"min": 6, "max": 80},
+            "amplitude": {"min": 0.8, "max": 3.0},
+            "positive_p": 0.5,
+        },
+        "rapid_rise_slow_decline": {
+            "enabled": True,
+            "window_length": {"min": 8, "max": 60},
+            "amplitude": {"min": 0.8, "max": 3.0},
+            "rapid_tau": {"min": 1.0, "max": 3.0},
+            "slow_tau": {"min": 4.0, "max": 12.0},
+        },
+        "slow_rise_rapid_decline": {
+            "enabled": True,
+            "window_length": {"min": 8, "max": 60},
+            "amplitude": {"min": 0.8, "max": 3.0},
+            "rapid_tau": {"min": 1.0, "max": 3.0},
+            "slow_tau": {"min": 4.0, "max": 12.0},
+        },
+        "rapid_decline_slow_rise": {
+            "enabled": True,
+            "window_length": {"min": 8, "max": 60},
+            "amplitude": {"min": 0.8, "max": 3.0},
+            "rapid_tau": {"min": 1.0, "max": 3.0},
+            "slow_tau": {"min": 4.0, "max": 12.0},
+        },
+        "slow_decline_rapid_rise": {
+            "enabled": True,
+            "window_length": {"min": 8, "max": 60},
+            "amplitude": {"min": 0.8, "max": 3.0},
+            "rapid_tau": {"min": 1.0, "max": 3.0},
+            "slow_tau": {"min": 4.0, "max": 12.0},
+        },
+        "decrease_after_upward_spike": {
+            "enabled": True,
+            "window_length": {"min": 8, "max": 80},
+            "amplitude": {"min": 0.8, "max": 3.0},
+            "half_width": {"min": 1, "max": 6},
+            "shift_magnitude": {"min": 0.5, "max": 2.5},
+        },
+        "increase_after_downward_spike": {
+            "enabled": True,
+            "window_length": {"min": 8, "max": 80},
+            "amplitude": {"min": 0.8, "max": 3.0},
+            "half_width": {"min": 1, "max": 6},
+            "shift_magnitude": {"min": 0.5, "max": 2.5},
+        },
+        "increase_after_upward_spike": {
+            "enabled": True,
+            "window_length": {"min": 8, "max": 80},
+            "amplitude": {"min": 0.8, "max": 3.0},
+            "half_width": {"min": 1, "max": 6},
+            "shift_magnitude": {"min": 0.5, "max": 2.5},
+        },
+        "decrease_after_downward_spike": {
+            "enabled": True,
+            "window_length": {"min": 8, "max": 80},
+            "amplitude": {"min": 0.8, "max": 3.0},
+            "half_width": {"min": 1, "max": 6},
+            "shift_magnitude": {"min": 0.5, "max": 2.5},
+        },
+        "shake": {
+            "enabled": True,
+            "window_length": {"min": 10, "max": 60},
+            "amplitude": {"min": 0.5, "max": 2.2},
+            "frequency": {"min": 0.1, "max": 0.35},
+            "phase": {"min": 0.0, "max": 2.0 * 3.141592653589793},
+        },
+    }
+
+
+def _default_seasonal_type_weights() -> dict[str, float]:
+    return {
+        "waveform_inversion": 0.8,
+        "amplitude_scaling": 1.0,
+        "frequency_change": 0.7,
+        "phase_shift": 0.8,
+        "noise_injection": 0.5,
+        "waveform_change": 0.4,
+        "add_harmonic": 0.5,
+        "remove_harmonic": 0.4,
+        "modify_harmonic_phase": 0.6,
+        "modify_modulation_depth": 0.4,
+        "modify_modulation_frequency": 0.4,
+        "modify_modulation_phase": 0.4,
+        "pulse_shift": 0.4,
+        "pulse_width_modulation": 0.4,
+        "wavelet_family_change": 0.4,
+        "wavelet_scale_change": 0.6,
+        "wavelet_shift_change": 0.6,
+        "wavelet_amplitude_change": 0.6,
+        "add_wavelet": 0.3,
+        "remove_wavelet": 0.3,
+    }
+
+
+def _default_seasonal_per_type() -> dict[str, dict[str, Any]]:
+    periodic = ["sine", "square", "triangle"]
+    all_types = ["sine", "square", "triangle", "wavelet"]
+    return {
+        "waveform_inversion": {
+            "enabled": True,
+            "applies_to": list(all_types),
+            "window_length": {"min": 8, "max": 80},
+        },
+        "amplitude_scaling": {
+            "enabled": True,
+            "applies_to": list(all_types),
+            "window_length": {"min": 8, "max": 80},
+            "scale": {"min": 0.35, "max": 2.2},
+        },
+        "frequency_change": {
+            "enabled": True,
+            "applies_to": list(all_types),
+            "window_length": {"min": 8, "max": 80},
+            "factor": {"min": 0.5, "max": 1.9},
+        },
+        "phase_shift": {
+            "enabled": True,
+            "applies_to": list(periodic),
+            "window_length": {"min": 8, "max": 80},
+            "delta_phase": {"min": 0.4712, "max": 4.7124},
+        },
+        "noise_injection": {
+            "enabled": True,
+            "applies_to": list(all_types),
+            "window_length": {"min": 8, "max": 80},
+            "noise_scale": {"min": 0.2, "max": 1.1},
+        },
+        "waveform_change": {
+            "enabled": True,
+            "applies_to": list(periodic),
+            "window_length": {"min": 8, "max": 80},
+            "target_type_weights": {
+                "sine": 0.4,
+                "square": 0.3,
+                "triangle": 0.3,
+            },
+        },
+        "add_harmonic": {
+            "enabled": True,
+            "applies_to": list(periodic),
+            "window_length": {"min": 8, "max": 80},
+            "order": {"min": 2, "max": 4},
+            "amplitude_scale": {"min": 0.25, "max": 0.8},
+            "phase": {"min": 0.0, "max": 2.0 * 3.141592653589793},
+        },
+        "remove_harmonic": {
+            "enabled": True,
+            "applies_to": list(periodic),
+            "window_length": {"min": 8, "max": 80},
+        },
+        "modify_harmonic_phase": {
+            "enabled": True,
+            "applies_to": list(periodic),
+            "window_length": {"min": 8, "max": 80},
+            "delta_phase": {"min": 0.4712, "max": 4.7124},
+        },
+        "modify_modulation_depth": {
+            "enabled": True,
+            "applies_to": list(periodic),
+            "window_length": {"min": 8, "max": 80},
+            "depth": {"min": 0.05, "max": 0.95},
+        },
+        "modify_modulation_frequency": {
+            "enabled": True,
+            "applies_to": list(periodic),
+            "window_length": {"min": 8, "max": 80},
+            "factor": {"min": 0.15, "max": 2.0},
+        },
+        "modify_modulation_phase": {
+            "enabled": True,
+            "applies_to": list(periodic),
+            "window_length": {"min": 8, "max": 80},
+            "phase": {"min": 0.0, "max": 2.0 * 3.141592653589793},
+        },
+        "pulse_shift": {
+            "enabled": True,
+            "applies_to": ["square", "triangle"],
+            "window_length": {"min": 8, "max": 80},
+            "delta_cycle": {"min": -0.35, "max": 0.35},
+        },
+        "pulse_width_modulation": {
+            "enabled": True,
+            "applies_to": ["square", "triangle"],
+            "window_length": {"min": 8, "max": 80},
+            "factor": {"min": 0.5, "max": 1.6},
+        },
+        "wavelet_family_change": {
+            "enabled": True,
+            "applies_to": ["wavelet"],
+            "window_length": {"min": 8, "max": 80},
+            "target_family_weights": dict(DEFAULT_WAVELET_FAMILY_WEIGHTS),
+        },
+        "wavelet_scale_change": {
+            "enabled": True,
+            "applies_to": ["wavelet"],
+            "window_length": {"min": 8, "max": 80},
+            "factor": {"min": 0.6, "max": 1.8},
+        },
+        "wavelet_shift_change": {
+            "enabled": True,
+            "applies_to": ["wavelet"],
+            "window_length": {"min": 8, "max": 80},
+            "delta_shift": {"min": -0.35, "max": 0.35},
+        },
+        "wavelet_amplitude_change": {
+            "enabled": True,
+            "applies_to": ["wavelet"],
+            "window_length": {"min": 8, "max": 80},
+            "factor": {"min": 0.5, "max": 1.8},
+        },
+        "add_wavelet": {
+            "enabled": True,
+            "applies_to": ["wavelet"],
+            "window_length": {"min": 8, "max": 80},
+            "family_weights": dict(DEFAULT_WAVELET_FAMILY_WEIGHTS),
+            "period": {"min": 6.0, "max": 120.0},
+            "amplitude": {"min": 0.2, "max": 2.0},
+            "phase": {"min": 0.0, "max": 2.0 * 3.141592653589793},
+            "scale": {"min": 0.08, "max": 0.35},
+            "shift": {"min": 0.0, "max": 1.0},
+        },
+        "remove_wavelet": {
+            "enabled": True,
+            "applies_to": ["wavelet"],
+            "window_length": {"min": 8, "max": 80},
+        },
+    }
+
+
+def _default_anomaly_config() -> dict[str, Any]:
+    return {
+        "defaults": {
+            "allow_overlap": False,
+            "min_gap": 0,
+            "max_events_per_node": 2,
+        },
+        "local": {
+            "budget": {"events_per_sample": {"min": 1, "max": 3}},
+            "defaults": {
+                "window_length": {"min": 8, "max": 80},
+                "endogenous_p": 0.5,
+                "target_component": "observed",
+                "node_policy": {"mode": "uniform"},
+            },
+            "type_weights": _default_local_type_weights(),
+            "per_type": _default_local_per_type(),
+        },
+        "seasonal": {
+            "activation_p": 0.4,
+            "budget": {"events_per_sample": {"min": 1, "max": 2}},
+            "defaults": {
+                "window_length": {"min": 8, "max": 80},
+                "endogenous_p": 0.25,
+                "target_component": "seasonality",
+                "node_policy": {"mode": "seasonal_eligible"},
+            },
+            "type_weights": _default_seasonal_type_weights(),
+            "per_type": _default_seasonal_per_type(),
+        },
+    }
 
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -135,14 +551,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
                 "high": {"min": 6, "max": 30},
             },
             "wavelet": {
-                "families": {
-                    "morlet": 0.22,
-                    "ricker": 0.20,
-                    "haar": 0.14,
-                    "gaus": 0.16,
-                    "mexh": 0.14,
-                    "shan": 0.14,
-                },
+                "families": dict(DEFAULT_WAVELET_FAMILY_WEIGHTS),
                 "scale": {"min": 0.08, "max": 0.35},
                 "shift": {"min": 0.0, "max": 1.0},
                 "contrastive": {
@@ -172,27 +581,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "alpha_i_min": 0.1,
         "alpha_i_max": 0.9,
     },
-    "anomaly": {
-        "events_per_sample": {"min": 1, "max": 3},
-        "window_length": {"min": 8, "max": 80},
-        "local_types": [
-            "upward_spike",
-            "downward_spike",
-            "sudden_increase",
-            "sudden_decrease",
-            "shake",
-            "plateau",
-        ],
-        "seasonal_types": [
-            "waveform_inversion",
-            "amplitude_scaling",
-            "frequency_change",
-            "phase_shift",
-            "noise_injection",
-        ],
-        "p_endogenous": 0.5,
-        "p_use_seasonal_injector": 0.4,
-    },
+    "anomaly": _default_anomaly_config(),
     "debug": {
         "enable_trend": True,
         "enable_seasonality": True,
@@ -226,6 +615,154 @@ def _load_raw(path: Path) -> dict[str, Any]:
         with path.open("r", encoding="utf-8") as f:
             return yaml.safe_load(f)
     raise ValueError(f"Unsupported config format: {path}")
+
+
+def _ensure_generic_range(raw: Any, name: str) -> dict[str, int | float]:
+    if not isinstance(raw, dict) or set(raw.keys()) != {"min", "max"}:
+        raise ValueError(f"{name} must have min/max")
+    low = raw["min"]
+    high = raw["max"]
+    if isinstance(low, bool) or isinstance(high, bool) or not isinstance(low, (int, float)) or not isinstance(high, (int, float)):
+        raise ValueError(f"{name} must use numeric min/max")
+    if float(high) < float(low):
+        raise ValueError(f"{name}.max must be >= {name}.min")
+    return {"min": low, "max": high}
+
+
+def _ensure_non_negative_weight_map(
+    raw: Any,
+    name: str,
+    allowed_keys: set[str] | None = None,
+) -> dict[str, float]:
+    if not isinstance(raw, dict) or not raw:
+        raise ValueError(f"{name} must be a non-empty mapping")
+    normalized: dict[str, float] = {}
+    for key, value in raw.items():
+        skey = str(key)
+        if allowed_keys is not None and skey not in allowed_keys:
+            raise ValueError(f"{name} contains unsupported key: {skey}")
+        normalized[skey] = ensure_non_negative_float(value, f"{name}.{skey}")
+    return normalized
+
+
+def _normalize_node_policy(raw: Any, name: str, allowed_modes: set[str]) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        raise ValueError(f"{name} must be a mapping")
+    mode = str(raw.get("mode", "uniform"))
+    if mode not in allowed_modes:
+        raise ValueError(f"{name}.mode must be one of {sorted(allowed_modes)}, got {mode}")
+    allowed_nodes = raw.get("allowed_nodes")
+    if allowed_nodes is not None:
+        if not isinstance(allowed_nodes, list):
+            raise ValueError(f"{name}.allowed_nodes must be a list of ints or null")
+        cleaned_nodes = [ensure_non_negative_int(value, f"{name}.allowed_nodes[{index}]") for index, value in enumerate(allowed_nodes)]
+    else:
+        cleaned_nodes = None
+    return {"mode": mode, "allowed_nodes": cleaned_nodes}
+
+
+def _normalize_type_specs(
+    raw: Any,
+    name: str,
+    allowed_types: list[str],
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(raw, dict):
+        raise ValueError(f"{name} must be a mapping")
+    allowed_set = set(allowed_types)
+    extras = set(raw.keys()) - allowed_set
+    if extras:
+        raise ValueError(f"{name} contains unsupported types: {sorted(extras)}")
+
+    specs: dict[str, dict[str, Any]] = {}
+    for kind in allowed_types:
+        spec = raw.get(kind)
+        if not isinstance(spec, dict):
+            raise ValueError(f"{name}.{kind} must be a mapping")
+        cleaned: dict[str, Any] = {}
+        for key, value in spec.items():
+            field_name = f"{name}.{kind}.{key}"
+            if key == "enabled":
+                cleaned[key] = bool(value)
+                continue
+            if key == "window_length":
+                cleaned[key] = ensure_int_range(value, field_name, min_value=1)
+                continue
+            if key == "applies_to":
+                if not isinstance(value, list) or not value:
+                    raise ValueError(f"{field_name} must be a non-empty list")
+                cleaned[key] = [str(item) for item in value]
+                invalid = [item for item in cleaned[key] if item not in {"sine", "square", "triangle", "wavelet"}]
+                if invalid:
+                    raise ValueError(f"{field_name} contains unsupported values: {invalid}")
+                continue
+            if key == "target_type_weights":
+                cleaned[key] = _ensure_non_negative_weight_map(
+                    value,
+                    field_name,
+                    {"sine", "square", "triangle"},
+                )
+                continue
+            if key in {"target_family_weights", "family_weights"}:
+                cleaned[key] = _ensure_non_negative_weight_map(
+                    value,
+                    field_name,
+                    set(DEFAULT_WAVELET_FAMILY_WEIGHTS),
+                )
+                continue
+            if isinstance(value, dict) and set(value.keys()) == {"min", "max"}:
+                cleaned[key] = _ensure_generic_range(value, field_name)
+                continue
+            if isinstance(value, list):
+                cleaned[key] = [item for item in value]
+                continue
+            if isinstance(value, (int, float, str, bool)):
+                cleaned[key] = value
+                continue
+            raise ValueError(f"Unsupported value for {field_name}")
+        cleaned.setdefault("enabled", True)
+        specs[kind] = cleaned
+    return specs
+
+
+def _legacy_type_weights(selected: Any, allowed_types: list[str]) -> dict[str, float]:
+    selected_set = {str(value) for value in selected} if isinstance(selected, list) else set()
+    return {kind: 1.0 if kind in selected_set else 0.0 for kind in allowed_types}
+
+
+def _copy_legacy_window_length(target: dict[str, Any], window_length: Any) -> None:
+    target.setdefault("defaults", {})["window_length"] = window_length
+    target.setdefault("per_type", {})
+    for spec in target["per_type"].values():
+        if "window_length" in spec:
+            spec["window_length"] = window_length
+
+
+def _normalize_anomaly_schema(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        raise ValueError("anomaly must be a mapping")
+
+    normalized = json.loads(json.dumps(_default_anomaly_config()))
+    for key in ["defaults", "local", "seasonal"]:
+        if key in raw and isinstance(raw[key], dict):
+            normalized[key] = _deep_merge(normalized[key], raw[key])
+    if "events_per_sample" in raw:
+        normalized["local"]["budget"]["events_per_sample"] = raw["events_per_sample"]
+    if "seasonal_events_per_sample" in raw:
+        normalized["seasonal"]["budget"]["events_per_sample"] = raw["seasonal_events_per_sample"]
+    if "window_length" in raw:
+        _copy_legacy_window_length(normalized["local"], raw["window_length"])
+        _copy_legacy_window_length(normalized["seasonal"], raw["window_length"])
+    if "local_types" in raw:
+        normalized["local"]["type_weights"] = _legacy_type_weights(raw["local_types"], LOCAL_ANOMALY_TYPES)
+    if "seasonal_types" in raw:
+        normalized["seasonal"]["type_weights"] = _legacy_type_weights(raw["seasonal_types"], SEASONAL_ANOMALY_TYPES)
+    if "p_endogenous" in raw:
+        normalized["local"]["defaults"]["endogenous_p"] = raw["p_endogenous"]
+    if "p_endogenous_seasonal" in raw:
+        normalized["seasonal"]["defaults"]["endogenous_p"] = raw["p_endogenous_seasonal"]
+    if "p_use_seasonal_injector" in raw:
+        normalized["seasonal"]["activation_p"] = raw["p_use_seasonal_injector"]
+    return normalized
 
 
 def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
@@ -348,17 +885,100 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
         alpha_i_max=alpha_i_max,
     )
 
-    anomaly_raw = raw["anomaly"]
-    anomaly = AnomalyConfig(
-        events_per_sample=ensure_int_range(anomaly_raw["events_per_sample"], "anomaly.events_per_sample"),
-        window_length=ensure_int_range(anomaly_raw["window_length"], "anomaly.window_length"),
-        local_types=[str(v) for v in anomaly_raw["local_types"]],
-        seasonal_types=[str(v) for v in anomaly_raw["seasonal_types"]],
-        p_endogenous=ensure_probability(anomaly_raw["p_endogenous"], "anomaly.p_endogenous"),
-        p_use_seasonal_injector=ensure_probability(
-            anomaly_raw["p_use_seasonal_injector"],
-            "anomaly.p_use_seasonal_injector",
+    anomaly_raw = _normalize_anomaly_schema(raw["anomaly"])
+    anomaly_defaults_raw = anomaly_raw["defaults"]
+    local_raw = anomaly_raw["local"]
+    seasonal_raw = anomaly_raw["seasonal"]
+
+    anomaly_defaults = {
+        "allow_overlap": bool(anomaly_defaults_raw["allow_overlap"]),
+        "min_gap": ensure_non_negative_int(anomaly_defaults_raw["min_gap"], "anomaly.defaults.min_gap"),
+        "max_events_per_node": ensure_positive_int(
+            anomaly_defaults_raw["max_events_per_node"],
+            "anomaly.defaults.max_events_per_node",
         ),
+    }
+
+    local = {
+        "budget": {
+            "events_per_sample": ensure_int_range(
+                local_raw["budget"]["events_per_sample"],
+                "anomaly.local.budget.events_per_sample",
+            )
+        },
+        "defaults": {
+            "window_length": ensure_int_range(
+                local_raw["defaults"]["window_length"],
+                "anomaly.local.defaults.window_length",
+                min_value=1,
+            ),
+            "endogenous_p": ensure_probability(
+                local_raw["defaults"]["endogenous_p"],
+                "anomaly.local.defaults.endogenous_p",
+            ),
+            "target_component": str(local_raw["defaults"]["target_component"]),
+            "node_policy": _normalize_node_policy(
+                local_raw["defaults"].get("node_policy", {"mode": "uniform"}),
+                "anomaly.local.defaults.node_policy",
+                {"uniform"},
+            ),
+        },
+        "type_weights": _ensure_non_negative_weight_map(
+            local_raw["type_weights"],
+            "anomaly.local.type_weights",
+            set(LOCAL_ANOMALY_TYPES),
+        ),
+        "per_type": _normalize_type_specs(
+            local_raw["per_type"],
+            "anomaly.local.per_type",
+            LOCAL_ANOMALY_TYPES,
+        ),
+    }
+
+    seasonal = {
+        "activation_p": ensure_probability(
+            seasonal_raw["activation_p"],
+            "anomaly.seasonal.activation_p",
+        ),
+        "budget": {
+            "events_per_sample": ensure_int_range(
+                seasonal_raw["budget"]["events_per_sample"],
+                "anomaly.seasonal.budget.events_per_sample",
+            )
+        },
+        "defaults": {
+            "window_length": ensure_int_range(
+                seasonal_raw["defaults"]["window_length"],
+                "anomaly.seasonal.defaults.window_length",
+                min_value=1,
+            ),
+            "endogenous_p": ensure_probability(
+                seasonal_raw["defaults"]["endogenous_p"],
+                "anomaly.seasonal.defaults.endogenous_p",
+            ),
+            "target_component": str(seasonal_raw["defaults"]["target_component"]),
+            "node_policy": _normalize_node_policy(
+                seasonal_raw["defaults"].get("node_policy", {"mode": "seasonal_eligible"}),
+                "anomaly.seasonal.defaults.node_policy",
+                {"uniform", "seasonal_eligible"},
+            ),
+        },
+        "type_weights": _ensure_non_negative_weight_map(
+            seasonal_raw["type_weights"],
+            "anomaly.seasonal.type_weights",
+            set(SEASONAL_ANOMALY_TYPES),
+        ),
+        "per_type": _normalize_type_specs(
+            seasonal_raw["per_type"],
+            "anomaly.seasonal.per_type",
+            SEASONAL_ANOMALY_TYPES,
+        ),
+    }
+
+    anomaly = AnomalyConfig(
+        defaults=anomaly_defaults,
+        local=local,
+        seasonal=seasonal,
     )
 
     debug_raw = raw["debug"]
@@ -409,6 +1029,10 @@ def load_config(path: Path) -> GeneratorConfig:
 
 
 def load_config_from_raw(raw: dict[str, Any]) -> GeneratorConfig:
-    merged = _deep_merge(DEFAULT_CONFIG, raw)
+    incoming = json.loads(json.dumps(raw))
+    if "anomaly" in incoming:
+        incoming["anomaly"] = _normalize_anomaly_schema(incoming["anomaly"])
+    merged = _deep_merge(DEFAULT_CONFIG, incoming)
     merged = json.loads(json.dumps(merged))
+    merged["anomaly"] = _normalize_anomaly_schema(merged["anomaly"])
     return _build_config(merged)

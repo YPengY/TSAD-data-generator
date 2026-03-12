@@ -1,111 +1,627 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+
+from copy import deepcopy
+from typing import Any
 
 import numpy as np
 
+from ..components.seasonality import render_seasonality
 from ..config import GeneratorConfig
+from ..utils import IntRange, weighted_choice
 from .local import AnomalyEvent
 
 
 class SeasonalAnomalyInjector:
-    """Stage 3 seasonal/contextual anomalies from Appendix C.4.2."""
+    """Stage 3 seasonal/contextual anomalies over seasonal components."""
+
+    _SIGNAL_TRANSFORMS = {
+        "waveform_inversion",
+        "amplitude_scaling",
+        "frequency_change",
+        "noise_injection",
+    }
+    _PERIODIC_PARAM_TRANSFORMS = {
+        "waveform_change",
+        "phase_shift",
+        "add_harmonic",
+        "remove_harmonic",
+        "modify_harmonic_phase",
+        "modify_modulation_depth",
+        "modify_modulation_frequency",
+        "modify_modulation_phase",
+    }
+    _PULSE_TRANSFORMS = {"pulse_shift", "pulse_width_modulation"}
+    _WAVELET_TRANSFORMS = {
+        "wavelet_family_change",
+        "wavelet_scale_change",
+        "wavelet_shift_change",
+        "wavelet_amplitude_change",
+        "add_wavelet",
+        "remove_wavelet",
+    }
 
     def __init__(self, config: GeneratorConfig) -> None:
         self.config = config
 
-    def _sample_window(self, n: int, rng: np.random.Generator) -> tuple[int, int]:
-        max_len = min(self.config.anomaly.window_length.max, n)
-        min_len = min(self.config.anomaly.window_length.min, max_len)
+    def _seasonal_config(self) -> dict[str, Any]:
+        return self.config.anomaly.seasonal
+
+    def _placement_policy(self) -> dict[str, Any]:
+        return self.config.anomaly.defaults
+
+    def _range_bounds(
+        self,
+        value: IntRange | dict[str, Any] | int | float,
+        *,
+        integer: bool,
+    ) -> tuple[int | float, int | float]:
+        if isinstance(value, IntRange):
+            return value.min, value.max
+        if isinstance(value, dict) and "min" in value and "max" in value:
+            low = value["min"]
+            high = value["max"]
+        else:
+            low = value
+            high = value
+        if integer:
+            return int(low), int(high)
+        return float(low), float(high)
+
+    def _sample_int(
+        self,
+        value: IntRange | dict[str, Any] | int,
+        rng: np.random.Generator,
+        *,
+        low_clip: int | None = None,
+        high_clip: int | None = None,
+    ) -> int:
+        low, high = self._range_bounds(value, integer=True)
+        if low_clip is not None:
+            low = max(int(low), int(low_clip))
+        if high_clip is not None:
+            high = min(int(high), int(high_clip))
+        if int(high) < int(low):
+            high = low
+        return int(rng.integers(int(low), int(high) + 1))
+
+    def _sample_float(
+        self,
+        value: dict[str, Any] | int | float,
+        rng: np.random.Generator,
+        *,
+        low_clip: float | None = None,
+        high_clip: float | None = None,
+    ) -> float:
+        low, high = self._range_bounds(value, integer=False)
+        if low_clip is not None:
+            low = max(float(low), float(low_clip))
+        if high_clip is not None:
+            high = min(float(high), float(high_clip))
+        if float(high) < float(low):
+            high = low
+        if float(high) == float(low):
+            return float(low)
+        return float(rng.uniform(float(low), float(high)))
+
+    def _sample_window(self, n: int, rng: np.random.Generator, spec: dict[str, Any]) -> tuple[int, int]:
+        family_window = self._seasonal_config()["defaults"]["window_length"]
+        base_window = spec.get("window_length", family_window)
+        min_len, max_len = self._range_bounds(base_window, integer=True)
+        max_len = min(int(max_len), n)
+        min_len = min(max(1, int(min_len)), max_len)
         length = int(rng.integers(min_len, max_len + 1))
         start = int(rng.integers(0, n - length + 1))
         return start, start + length
 
     def _frequency_warp(self, segment: np.ndarray, factor: float) -> np.ndarray:
         m = segment.size
+        if m <= 1:
+            return segment.copy()
         src = np.arange(m, dtype=float)
         warped = (src * factor) % max(1, m - 1)
         return np.interp(warped, src, segment)
 
-    def sample_events(self, n: int, d: int, rng: np.random.Generator) -> list[AnomalyEvent]:
-        if d == 0 or rng.random() > self.config.anomaly.p_use_seasonal_injector:
+    def _candidate_kinds(self, season_params: dict[str, Any]) -> list[str]:
+        season_type = str(season_params.get("seasonality_type", "none"))
+        atoms = list(season_params.get("atoms", []))
+        if season_type == "none" or not atoms:
             return []
 
-        node = int(rng.integers(0, d))
-        t_start, t_end = self._sample_window(n, rng)
-        kind = str(rng.choice(self.config.anomaly.seasonal_types))
+        seasonal_cfg = self._seasonal_config()
+        type_weights = seasonal_cfg["type_weights"]
+        candidates: list[str] = []
+        for kind, spec in seasonal_cfg["per_type"].items():
+            if not spec.get("enabled", True) or float(type_weights.get(kind, 0.0)) <= 0.0:
+                continue
+            applies_to = [str(value) for value in spec.get("applies_to", [])]
+            if applies_to and season_type not in applies_to:
+                continue
+            candidates.append(kind)
+        return candidates
 
-        params: dict[str, float] = {}
+    def _sample_event_params(
+        self,
+        kind: str,
+        season_params: dict[str, Any],
+        rng: np.random.Generator,
+        spec: dict[str, Any],
+    ) -> dict[str, Any]:
+        atoms = list(season_params.get("atoms", []))
+        season_type = str(season_params.get("seasonality_type", "none"))
+
         if kind == "amplitude_scaling":
-            params["scale"] = float(rng.uniform(0.35, 2.2))
-        elif kind == "frequency_change":
-            params["factor"] = float(rng.uniform(0.5, 1.9))
-        elif kind == "phase_shift":
-            params["shift"] = float(rng.integers(1, max(2, (t_end - t_start) // 4 + 1)))
-        elif kind == "noise_injection":
-            params["noise_scale"] = float(rng.uniform(0.3, 1.2))
+            return {"scale": self._sample_float(spec["scale"], rng)}
+        if kind == "frequency_change":
+            return {"factor": self._sample_float(spec["factor"], rng)}
+        if kind == "noise_injection":
+            return {"noise_scale": self._sample_float(spec["noise_scale"], rng)}
+        if kind == "waveform_change":
+            choices = [value for value in ["sine", "square", "triangle"] if value != season_type]
+            weights = {
+                target: float(spec["target_type_weights"].get(target, 0.0))
+                for target in choices
+                if float(spec["target_type_weights"].get(target, 0.0)) > 0.0
+            }
+            target = weighted_choice(rng, weights) if weights else str(rng.choice(choices))
+            return {"target_type": target}
+        if kind == "phase_shift":
+            return {"delta_phase": self._sample_float(spec["delta_phase"], rng)}
+        if kind == "add_harmonic":
+            base_period = float(np.median([float(atom["period"]) for atom in atoms]))
+            order = self._sample_int(spec["order"], rng, low_clip=2)
+            harmonic_period = max(2.0, base_period / order)
+            mean_amplitude = float(np.mean([float(atom["amplitude"]) for atom in atoms]))
+            return {
+                "amplitude": self._sample_float(spec["amplitude_scale"], rng) * max(mean_amplitude, 0.2),
+                "period": harmonic_period,
+                "phase": self._sample_float(spec["phase"], rng),
+            }
+        if kind == "remove_harmonic":
+            return {"index": int(rng.integers(0, len(atoms)))}
+        if kind == "modify_harmonic_phase":
+            return {
+                "index": int(rng.integers(0, len(atoms))),
+                "delta_phase": self._sample_float(spec["delta_phase"], rng),
+            }
+        if kind == "modify_modulation_depth":
+            return {
+                "index": int(rng.integers(0, len(atoms))),
+                "depth": self._sample_float(spec["depth"], rng, low_clip=0.0, high_clip=1.0),
+            }
+        if kind == "modify_modulation_frequency":
+            index = int(rng.integers(0, len(atoms)))
+            atom_freq = float(atoms[index]["frequency"])
+            return {
+                "index": index,
+                "frequency": self._sample_float(spec["factor"], rng, low_clip=0.0) * atom_freq,
+            }
+        if kind == "modify_modulation_phase":
+            return {
+                "index": int(rng.integers(0, len(atoms))),
+                "phase": self._sample_float(spec["phase"], rng),
+            }
+        if kind == "pulse_shift":
+            return {"delta_cycle": self._sample_float(spec["delta_cycle"], rng)}
+        if kind == "pulse_width_modulation":
+            return {"factor": self._sample_float(spec["factor"], rng)}
+        if kind == "wavelet_family_change":
+            index = int(rng.integers(0, len(atoms)))
+            source = str(atoms[index].get("family", "morlet"))
+            weights = {
+                family: float(spec["target_family_weights"].get(family, 0.0))
+                for family in self.config.stage1.wavelet_family_weights
+                if family != source and float(spec["target_family_weights"].get(family, 0.0)) > 0.0
+            }
+            choices = list(weights.keys()) or [family for family in self.config.stage1.wavelet_family_weights if family != source]
+            target_family = weighted_choice(rng, weights) if weights else str(rng.choice(choices))
+            return {"index": index, "target_family": target_family}
+        if kind == "wavelet_scale_change":
+            return {
+                "index": int(rng.integers(0, len(atoms))),
+                "factor": self._sample_float(spec["factor"], rng),
+            }
+        if kind == "wavelet_shift_change":
+            return {
+                "index": int(rng.integers(0, len(atoms))),
+                "delta_shift": self._sample_float(spec["delta_shift"], rng),
+            }
+        if kind == "wavelet_amplitude_change":
+            return {
+                "index": int(rng.integers(0, len(atoms))),
+                "factor": self._sample_float(spec["factor"], rng),
+            }
+        if kind == "add_wavelet":
+            family_weights = {
+                family: float(spec["family_weights"].get(family, 0.0))
+                for family in self.config.stage1.wavelet_family_weights
+                if float(spec["family_weights"].get(family, 0.0)) > 0.0
+            }
+            return {
+                "family": weighted_choice(rng, family_weights) if family_weights else str(rng.choice(list(self.config.stage1.wavelet_family_weights.keys()))),
+                "period": self._sample_float(spec["period"], rng, low_clip=2.0),
+                "amplitude": self._sample_float(spec["amplitude"], rng, low_clip=0.0),
+                "phase": self._sample_float(spec["phase"], rng),
+                "scale": self._sample_float(spec["scale"], rng, low_clip=1e-6),
+                "shift": self._sample_float(spec["shift"], rng),
+            }
+        if kind == "remove_wavelet":
+            return {"index": int(rng.integers(0, len(atoms)))}
 
-        return [
-            AnomalyEvent(
-                anomaly_type=kind,
-                node=node,
-                t_start=t_start,
-                t_end=t_end,
-                params=params,
-                is_endogenous=False,
-                root_cause_node=None,
-                affected_nodes=[node],
+        return {}
+
+    def _eligible_nodes(
+        self,
+        d: int,
+        stage1_params: list[dict[str, Any]],
+    ) -> list[int]:
+        policy = self._seasonal_config()["defaults"]["node_policy"]
+        allowed = policy.get("allowed_nodes")
+        allowed_set = {int(node) for node in allowed} if allowed is not None else None
+        nodes = list(range(d))
+        if allowed_set is not None:
+            nodes = [node for node in nodes if node in allowed_set]
+        if policy.get("mode") == "seasonal_eligible":
+            nodes = [
+                node
+                for node in nodes
+                if stage1_params[node]["seasonality"].get("seasonality_type", "none") != "none"
+                and stage1_params[node]["seasonality"].get("atoms")
+            ]
+        return nodes
+
+    def _can_place(
+        self,
+        node: int,
+        t_start: int,
+        t_end: int,
+        placements: dict[int, list[tuple[int, int]]],
+        counts: dict[int, int],
+    ) -> bool:
+        policy = self._placement_policy()
+        if counts.get(node, 0) >= int(policy["max_events_per_node"]):
+            return False
+        if bool(policy["allow_overlap"]):
+            return True
+        min_gap = int(policy["min_gap"])
+        for start, end in placements.get(node, []):
+            if not (t_end + min_gap <= start or t_start >= end + min_gap):
+                return False
+        return True
+
+    def sample_events(
+        self,
+        n: int,
+        d: int,
+        rng: np.random.Generator,
+        stage1_params: list[dict[str, Any]] | None = None,
+    ) -> list[AnomalyEvent]:
+        seasonal_cfg = self._seasonal_config()
+        if d == 0 or stage1_params is None or rng.random() > float(seasonal_cfg["activation_p"]):
+            return []
+
+        nodes = self._eligible_nodes(d=d, stage1_params=stage1_params)
+        if not nodes:
+            return []
+
+        placements: dict[int, list[tuple[int, int]]] = {node: [] for node in nodes}
+        counts: dict[int, int] = {node: 0 for node in nodes}
+        count = seasonal_cfg["budget"]["events_per_sample"].sample(rng)
+        events: list[AnomalyEvent] = []
+
+        for _ in range(count):
+            placed = False
+            for _attempt in range(48):
+                node = int(rng.choice(nodes))
+                kinds = self._candidate_kinds(stage1_params[node]["seasonality"])
+                if not kinds:
+                    continue
+                kind_weights = {
+                    kind: float(seasonal_cfg["type_weights"].get(kind, 0.0))
+                    for kind in kinds
+                    if float(seasonal_cfg["type_weights"].get(kind, 0.0)) > 0.0
+                }
+                if not kind_weights:
+                    continue
+                kind = weighted_choice(rng, kind_weights)
+                spec = seasonal_cfg["per_type"][kind]
+                t_start, t_end = self._sample_window(n, rng, spec=spec)
+                if not self._can_place(node=node, t_start=t_start, t_end=t_end, placements=placements, counts=counts):
+                    continue
+                params = self._sample_event_params(
+                    kind=kind,
+                    season_params=stage1_params[node]["seasonality"],
+                    rng=rng,
+                    spec=spec,
+                )
+                endogenous_p = float(seasonal_cfg["defaults"]["endogenous_p"])
+                is_endogenous = bool(d > 1 and rng.random() < endogenous_p)
+                placements[node].append((t_start, t_end))
+                counts[node] += 1
+                events.append(
+                    AnomalyEvent(
+                        anomaly_type=kind,
+                        node=node,
+                        t_start=t_start,
+                        t_end=t_end,
+                        params=params,
+                        is_endogenous=is_endogenous,
+                        root_cause_node=node if is_endogenous else None,
+                        affected_nodes=[node],
+                        family="seasonal",
+                        target_component=str(seasonal_cfg["defaults"]["target_component"]),
+                    )
+                )
+                placed = True
+                break
+            if not placed:
+                continue
+
+        return events
+
+    def _apply_signal_transform(
+        self,
+        kind: str,
+        segment: np.ndarray,
+        params: dict[str, Any],
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        if kind == "waveform_inversion":
+            return -segment
+        if kind == "amplitude_scaling":
+            return float(params["scale"]) * segment
+        if kind == "frequency_change":
+            return self._frequency_warp(segment=segment, factor=float(params["factor"]))
+        std = float(np.std(segment)) + 1e-4
+        noise_scale = float(params.get("noise_scale", 0.5))
+        return segment + rng.normal(0.0, noise_scale * std, size=segment.size)
+
+    def _apply_param_transform(
+        self,
+        kind: str,
+        season_params: dict[str, Any],
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
+        updated = deepcopy(season_params)
+        atoms = list(updated.get("atoms", []))
+        updated["atoms"] = atoms
+
+        if kind == "waveform_change":
+            target_type = str(params["target_type"])
+            updated["seasonality_type"] = target_type
+            for atom in atoms:
+                atom["type"] = target_type
+                if target_type in {"square", "triangle"}:
+                    atom.setdefault("duty_cycle", 0.5)
+                    atom.setdefault("cycle_shift", 0.0)
+                else:
+                    atom.pop("duty_cycle", None)
+                    atom.pop("cycle_shift", None)
+            return updated
+
+        if kind == "phase_shift":
+            delta_phase = float(params["delta_phase"])
+            for atom in atoms:
+                atom["phase"] = float(atom.get("phase", 0.0)) + delta_phase
+            return updated
+
+        if kind == "add_harmonic":
+            atom_type = str(updated["seasonality_type"])
+            atoms.append(
+                {
+                    "type": atom_type,
+                    "period": float(params["period"]),
+                    "frequency": 1.0 / float(params["period"]),
+                    "amplitude": float(params["amplitude"]),
+                    "phase": float(params["phase"]),
+                    "modulation_depth": 0.0,
+                    "modulation_frequency": 0.0,
+                    "modulation_phase": 0.0,
+                    "duty_cycle": 0.5 if atom_type in {"square", "triangle"} else None,
+                    "cycle_shift": 0.0 if atom_type in {"square", "triangle"} else None,
+                }
             )
-        ]
+            if atom_type not in {"square", "triangle"}:
+                atoms[-1].pop("duty_cycle", None)
+                atoms[-1].pop("cycle_shift", None)
+            return updated
+
+        if kind == "remove_harmonic":
+            if atoms:
+                atoms.pop(int(params["index"]) % len(atoms))
+            return updated
+
+        if kind == "modify_harmonic_phase":
+            if atoms:
+                atom = atoms[int(params["index"]) % len(atoms)]
+                atom["phase"] = float(atom.get("phase", 0.0)) + float(params["delta_phase"])
+            return updated
+
+        if kind == "modify_modulation_depth":
+            if atoms:
+                atom = atoms[int(params["index"]) % len(atoms)]
+                atom["modulation_depth"] = float(np.clip(float(params["depth"]), 0.0, 1.0))
+            return updated
+
+        if kind == "modify_modulation_frequency":
+            if atoms:
+                atom = atoms[int(params["index"]) % len(atoms)]
+                atom["modulation_frequency"] = max(0.0, float(params["frequency"]))
+            return updated
+
+        if kind == "modify_modulation_phase":
+            if atoms:
+                atom = atoms[int(params["index"]) % len(atoms)]
+                atom["modulation_phase"] = float(params["phase"])
+            return updated
+
+        if kind == "pulse_shift":
+            delta_cycle = float(params["delta_cycle"])
+            for atom in atoms:
+                atom["cycle_shift"] = (float(atom.get("cycle_shift", 0.0)) + delta_cycle) % 1.0
+            return updated
+
+        if kind == "pulse_width_modulation":
+            factor = float(params["factor"])
+            for atom in atoms:
+                duty = float(atom.get("duty_cycle", 0.5))
+                atom["duty_cycle"] = float(np.clip(duty * factor, 0.1, 0.9))
+            return updated
+
+        if kind == "wavelet_family_change" and atoms:
+            atom = atoms[int(params["index"]) % len(atoms)]
+            atom["family"] = str(params["target_family"])
+            atom["theta"] = {}
+            return updated
+
+        if kind == "wavelet_scale_change" and atoms:
+            atom = atoms[int(params["index"]) % len(atoms)]
+            atom["scale"] = float(np.clip(float(atom.get("scale", 0.18)) * float(params["factor"]), *self.config.stage1.wavelet_scale))
+            return updated
+
+        if kind == "wavelet_shift_change" and atoms:
+            atom = atoms[int(params["index"]) % len(atoms)]
+            shift = float(atom.get("shift", 0.0)) + float(params["delta_shift"])
+            atom["shift"] = float(shift % 1.0)
+            return updated
+
+        if kind == "wavelet_amplitude_change" and atoms:
+            atom = atoms[int(params["index"]) % len(atoms)]
+            atom["amplitude"] = float(atom.get("amplitude", 1.0)) * float(params["factor"])
+            return updated
+
+        if kind == "add_wavelet":
+            atoms.append(
+                {
+                    "type": "wavelet",
+                    "period": float(params["period"]),
+                    "frequency": 1.0 / float(params["period"]),
+                    "amplitude": float(params["amplitude"]),
+                    "phase": float(params["phase"]),
+                    "family": str(params["family"]),
+                    "scale": float(params["scale"]),
+                    "shift": float(params["shift"]),
+                    "theta": {},
+                    "modulation_depth": 0.0,
+                    "modulation_frequency": 0.0,
+                    "modulation_phase": 0.0,
+                }
+            )
+            return updated
+
+        if kind == "remove_wavelet" and atoms:
+            atoms.pop(int(params["index"]) % len(atoms))
+            return updated
+
+        return updated
+
+    def _seasonal_delta(
+        self,
+        t: np.ndarray,
+        season_params: dict[str, Any],
+        event: AnomalyEvent,
+        rng: np.random.Generator,
+    ) -> np.ndarray:
+        baseline = render_seasonality(t=t, params=season_params)
+        start = max(0, int(event.t_start))
+        end = min(t.size, int(event.t_end))
+        if start >= end:
+            return np.zeros(t.size, dtype=float)
+
+        delta = np.zeros(t.size, dtype=float)
+        window = slice(start, end)
+        if event.anomaly_type in self._SIGNAL_TRANSFORMS:
+            transformed_segment = self._apply_signal_transform(
+                kind=event.anomaly_type,
+                segment=baseline[window],
+                params=event.params,
+                rng=rng,
+            )
+            delta[window] = transformed_segment - baseline[window]
+            return delta
+
+        modified_params = self._apply_param_transform(
+            kind=event.anomaly_type,
+            season_params=season_params,
+            params=event.params,
+        )
+        transformed = render_seasonality(t=t, params=modified_params)
+        delta[window] = transformed[window] - baseline[window]
+        return delta
 
     def apply_events(
         self,
         x_input: np.ndarray,
         events: list[AnomalyEvent],
         rng: np.random.Generator,
+        t: np.ndarray,
+        stage1_params: list[dict[str, Any]],
+        arx=None,
+        arx_params: dict[str, Any] | None = None,
     ) -> tuple[np.ndarray, list[AnomalyEvent]]:
         x_out = x_input.copy()
         realized: list[AnomalyEvent] = []
+        n, d = x_out.shape
 
         for event in events:
-            t_start, t_end = int(event.t_start), int(event.t_end)
             node = int(event.node)
-            seg = x_out[t_start:t_end, node].copy()
-            kind = event.anomaly_type
+            if node < 0 or node >= d:
+                continue
 
-            if kind == "waveform_inversion":
-                seg = -seg
-            elif kind == "amplitude_scaling":
-                seg = float(event.params["scale"]) * seg
-            elif kind == "frequency_change":
-                seg = self._frequency_warp(seg, float(event.params["factor"]))
-            elif kind == "phase_shift":
-                seg = np.roll(seg, int(event.params["shift"]))
+            season_params = dict(stage1_params[node]["seasonality"])
+            delta = self._seasonal_delta(t=t, season_params=season_params, event=event, rng=rng)
+            if not np.any(np.abs(delta) > 1e-8):
+                realized.append(event)
+                continue
+
+            delta_matrix = np.zeros((n, d), dtype=float)
+            delta_matrix[:, node] = delta
+            affected_nodes = [node]
+
+            if arx is not None and arx_params is not None:
+                response, _ = arx.simulate_linear_response(x_base=delta_matrix, n_steps=n, params=arx_params)
+                if event.is_endogenous:
+                    x_out += response
+                    affected_nodes = (
+                        np.where(np.any(np.abs(response) > 1e-8, axis=0))[0].astype(int).tolist()
+                    ) or [node]
+                else:
+                    x_out[:, node] += response[:, node]
             else:
-                std = float(np.std(seg)) + 1e-4
-                noise_scale = float(event.params.get("noise_scale", 0.5))
-                seg = seg + rng.normal(0.0, noise_scale * std, size=seg.size)
-                kind = "noise_injection"
+                x_out[:, node] += delta
 
-            x_out[t_start:t_end, node] = seg
             realized.append(
                 AnomalyEvent(
-                    anomaly_type=kind,
+                    anomaly_type=event.anomaly_type,
                     node=node,
-                    t_start=t_start,
-                    t_end=t_end,
+                    t_start=event.t_start,
+                    t_end=event.t_end,
                     params=event.params,
-                    is_endogenous=False,
-                    root_cause_node=None,
-                    affected_nodes=[node],
+                    is_endogenous=event.is_endogenous,
+                    root_cause_node=event.root_cause_node,
+                    affected_nodes=affected_nodes,
+                    family=event.family,
+                    target_component=event.target_component,
                 )
             )
 
         return x_out, realized
 
-    # Backward-compatible wrapper.
     def inject(
         self,
         x_input: np.ndarray,
         rng: np.random.Generator,
+        t: np.ndarray,
+        stage1_params: list[dict[str, Any]],
+        arx=None,
+        arx_params: dict[str, Any] | None = None,
     ) -> tuple[np.ndarray, list[AnomalyEvent]]:
-        sampled = self.sample_events(n=x_input.shape[0], d=x_input.shape[1], rng=rng)
-        return self.apply_events(x_input=x_input, events=sampled, rng=rng)
+        sampled = self.sample_events(n=x_input.shape[0], d=x_input.shape[1], rng=rng, stage1_params=stage1_params)
+        return self.apply_events(
+            x_input=x_input,
+            events=sampled,
+            rng=rng,
+            t=t,
+            stage1_params=stage1_params,
+            arx=arx,
+            arx_params=arx_params,
+        )

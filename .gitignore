@@ -36,9 +36,14 @@ py_write_test.txt
 *.bak
 *.orig
 *.rej
+.eslintcache
 .cache/
 .ipynb_checkpoints/
 .python-version
+*.swp
+*.swo
+*.swn
+*.code-workspace
 
 
 --*
@@ -55,5 +60,6 @@ timercd_translated.txt
 # OS / editor noise
 .DS_Store
 Thumbs.db
+Desktop.ini
 .vscode/
 .idea/

@@ -1,5 +1,5 @@
-﻿{
-  "num_samples": 120,
+{
+  "num_samples": 100,
   "sequence_length": {
     "min": 100,
     "max": 1000
@@ -108,7 +108,7 @@
         "high": 0.2
       },
       "volatility_windows": {
-        "min": 1,
+        "min": 0,
         "max": 3
       },
       "volatility_multiplier": {
@@ -131,31 +131,791 @@
     "alpha_i_max": 0.9
   },
   "anomaly": {
-    "events_per_sample": {
-      "min": 1,
-      "max": 3
+    "defaults": {
+      "allow_overlap": false,
+      "min_gap": 0,
+      "max_events_per_node": 2
     },
-    "window_length": {
-      "min": 8,
-      "max": 80
+    "local": {
+      "budget": {
+        "events_per_sample": {
+          "min": 1,
+          "max": 3
+        }
+      },
+      "defaults": {
+        "window_length": {
+          "min": 8,
+          "max": 80
+        },
+        "endogenous_p": 0.5,
+        "target_component": "observed",
+        "node_policy": {
+          "mode": "uniform"
+        }
+      },
+      "type_weights": {
+        "upward_spike": 1.0,
+        "downward_spike": 1.0,
+        "continuous_upward_spikes": 0.8,
+        "continuous_downward_spikes": 0.8,
+        "wide_upward_spike": 0.6,
+        "wide_downward_spike": 0.6,
+        "outlier": 0.4,
+        "sudden_increase": 0.7,
+        "sudden_decrease": 0.7,
+        "convex_plateau": 0.5,
+        "concave_plateau": 0.5,
+        "rapid_rise_slow_decline": 0.5,
+        "slow_rise_rapid_decline": 0.5,
+        "rapid_decline_slow_rise": 0.5,
+        "slow_decline_rapid_rise": 0.5,
+        "decrease_after_upward_spike": 0.4,
+        "increase_after_downward_spike": 0.4,
+        "increase_after_upward_spike": 0.4,
+        "decrease_after_downward_spike": 0.4,
+        "shake": 0.3,
+        "plateau": 0.2
+      },
+      "per_type": {
+        "upward_spike": {
+          "enabled": true,
+          "window_length": {
+            "min": 5,
+            "max": 24
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          },
+          "half_width": {
+            "min": 1,
+            "max": 6
+          }
+        },
+        "downward_spike": {
+          "enabled": true,
+          "window_length": {
+            "min": 5,
+            "max": 24
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          },
+          "half_width": {
+            "min": 1,
+            "max": 6
+          }
+        },
+        "continuous_upward_spikes": {
+          "enabled": true,
+          "window_length": {
+            "min": 10,
+            "max": 48
+          },
+          "spike_count": {
+            "min": 2,
+            "max": 5
+          },
+          "stride": {
+            "min": 1,
+            "max": 8
+          },
+          "amplitude": {
+            "min": 0.6,
+            "max": 2.4
+          },
+          "half_width": {
+            "min": 1,
+            "max": 4
+          }
+        },
+        "continuous_downward_spikes": {
+          "enabled": true,
+          "window_length": {
+            "min": 10,
+            "max": 48
+          },
+          "spike_count": {
+            "min": 2,
+            "max": 5
+          },
+          "stride": {
+            "min": 1,
+            "max": 8
+          },
+          "amplitude": {
+            "min": 0.6,
+            "max": 2.4
+          },
+          "half_width": {
+            "min": 1,
+            "max": 4
+          }
+        },
+        "wide_upward_spike": {
+          "enabled": true,
+          "window_length": {
+            "min": 8,
+            "max": 40
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          },
+          "rise_length": {
+            "min": 1,
+            "max": 10
+          },
+          "fall_length": {
+            "min": 1,
+            "max": 10
+          }
+        },
+        "wide_downward_spike": {
+          "enabled": true,
+          "window_length": {
+            "min": 8,
+            "max": 40
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          },
+          "rise_length": {
+            "min": 1,
+            "max": 10
+          },
+          "fall_length": {
+            "min": 1,
+            "max": 10
+          }
+        },
+        "outlier": {
+          "enabled": true,
+          "amplitude": {
+            "min": -3.0,
+            "max": 3.0
+          },
+          "min_abs_amplitude": 0.3
+        },
+        "sudden_increase": {
+          "enabled": true,
+          "window_length": {
+            "min": 6,
+            "max": 80
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          },
+          "kappa": {
+            "min": 0.1,
+            "max": 0.4
+          }
+        },
+        "sudden_decrease": {
+          "enabled": true,
+          "window_length": {
+            "min": 6,
+            "max": 80
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          },
+          "kappa": {
+            "min": 0.1,
+            "max": 0.4
+          }
+        },
+        "convex_plateau": {
+          "enabled": true,
+          "window_length": {
+            "min": 6,
+            "max": 80
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          }
+        },
+        "concave_plateau": {
+          "enabled": true,
+          "window_length": {
+            "min": 6,
+            "max": 80
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          }
+        },
+        "plateau": {
+          "enabled": true,
+          "window_length": {
+            "min": 6,
+            "max": 80
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          },
+          "positive_p": 0.5
+        },
+        "rapid_rise_slow_decline": {
+          "enabled": true,
+          "window_length": {
+            "min": 8,
+            "max": 60
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          },
+          "rapid_tau": {
+            "min": 1.0,
+            "max": 3.0
+          },
+          "slow_tau": {
+            "min": 4.0,
+            "max": 12.0
+          }
+        },
+        "slow_rise_rapid_decline": {
+          "enabled": true,
+          "window_length": {
+            "min": 8,
+            "max": 60
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          },
+          "rapid_tau": {
+            "min": 1.0,
+            "max": 3.0
+          },
+          "slow_tau": {
+            "min": 4.0,
+            "max": 12.0
+          }
+        },
+        "rapid_decline_slow_rise": {
+          "enabled": true,
+          "window_length": {
+            "min": 8,
+            "max": 60
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          },
+          "rapid_tau": {
+            "min": 1.0,
+            "max": 3.0
+          },
+          "slow_tau": {
+            "min": 4.0,
+            "max": 12.0
+          }
+        },
+        "slow_decline_rapid_rise": {
+          "enabled": true,
+          "window_length": {
+            "min": 8,
+            "max": 60
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          },
+          "rapid_tau": {
+            "min": 1.0,
+            "max": 3.0
+          },
+          "slow_tau": {
+            "min": 4.0,
+            "max": 12.0
+          }
+        },
+        "decrease_after_upward_spike": {
+          "enabled": true,
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          },
+          "half_width": {
+            "min": 1,
+            "max": 6
+          },
+          "shift_magnitude": {
+            "min": 0.5,
+            "max": 2.5
+          }
+        },
+        "increase_after_downward_spike": {
+          "enabled": true,
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          },
+          "half_width": {
+            "min": 1,
+            "max": 6
+          },
+          "shift_magnitude": {
+            "min": 0.5,
+            "max": 2.5
+          }
+        },
+        "increase_after_upward_spike": {
+          "enabled": true,
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          },
+          "half_width": {
+            "min": 1,
+            "max": 6
+          },
+          "shift_magnitude": {
+            "min": 0.5,
+            "max": 2.5
+          }
+        },
+        "decrease_after_downward_spike": {
+          "enabled": true,
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "amplitude": {
+            "min": 0.8,
+            "max": 3.0
+          },
+          "half_width": {
+            "min": 1,
+            "max": 6
+          },
+          "shift_magnitude": {
+            "min": 0.5,
+            "max": 2.5
+          }
+        },
+        "shake": {
+          "enabled": true,
+          "window_length": {
+            "min": 10,
+            "max": 60
+          },
+          "amplitude": {
+            "min": 0.5,
+            "max": 2.2
+          },
+          "frequency": {
+            "min": 0.1,
+            "max": 0.35
+          },
+          "phase": {
+            "min": 0.0,
+            "max": 6.283185307179586
+          }
+        }
+      }
     },
-    "local_types": [
-      "upward_spike",
-      "downward_spike",
-      "sudden_increase",
-      "sudden_decrease",
-      "shake",
-      "plateau"
-    ],
-    "seasonal_types": [
-      "waveform_inversion",
-      "amplitude_scaling",
-      "frequency_change",
-      "phase_shift",
-      "noise_injection"
-    ],
-    "p_endogenous": 0.5,
-    "p_use_seasonal_injector": 0.4
+    "seasonal": {
+      "activation_p": 0.4,
+      "budget": {
+        "events_per_sample": {
+          "min": 1,
+          "max": 2
+        }
+      },
+      "defaults": {
+        "window_length": {
+          "min": 8,
+          "max": 80
+        },
+        "endogenous_p": 0.25,
+        "target_component": "seasonality",
+        "node_policy": {
+          "mode": "seasonal_eligible"
+        }
+      },
+      "type_weights": {
+        "waveform_inversion": 0.8,
+        "amplitude_scaling": 1.0,
+        "frequency_change": 0.7,
+        "phase_shift": 0.8,
+        "noise_injection": 0.5,
+        "waveform_change": 0.4,
+        "add_harmonic": 0.5,
+        "remove_harmonic": 0.4,
+        "modify_harmonic_phase": 0.6,
+        "modify_modulation_depth": 0.4,
+        "modify_modulation_frequency": 0.4,
+        "modify_modulation_phase": 0.4,
+        "pulse_shift": 0.4,
+        "pulse_width_modulation": 0.4,
+        "wavelet_family_change": 0.4,
+        "wavelet_scale_change": 0.6,
+        "wavelet_shift_change": 0.6,
+        "wavelet_amplitude_change": 0.6,
+        "add_wavelet": 0.3,
+        "remove_wavelet": 0.3
+      },
+      "per_type": {
+        "waveform_inversion": {
+          "enabled": true,
+          "applies_to": [
+            "sine",
+            "square",
+            "triangle",
+            "wavelet"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          }
+        },
+        "amplitude_scaling": {
+          "enabled": true,
+          "applies_to": [
+            "sine",
+            "square",
+            "triangle",
+            "wavelet"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "scale": {
+            "min": 0.35,
+            "max": 2.2
+          }
+        },
+        "frequency_change": {
+          "enabled": true,
+          "applies_to": [
+            "sine",
+            "square",
+            "triangle",
+            "wavelet"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "factor": {
+            "min": 0.5,
+            "max": 1.9
+          }
+        },
+        "phase_shift": {
+          "enabled": true,
+          "applies_to": [
+            "sine",
+            "square",
+            "triangle"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "delta_phase": {
+            "min": 0.4712,
+            "max": 4.7124
+          }
+        },
+        "noise_injection": {
+          "enabled": true,
+          "applies_to": [
+            "sine",
+            "square",
+            "triangle",
+            "wavelet"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "noise_scale": {
+            "min": 0.2,
+            "max": 1.1
+          }
+        },
+        "waveform_change": {
+          "enabled": true,
+          "applies_to": [
+            "sine",
+            "square",
+            "triangle"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "target_type_weights": {
+            "sine": 0.4,
+            "square": 0.3,
+            "triangle": 0.3
+          }
+        },
+        "add_harmonic": {
+          "enabled": true,
+          "applies_to": [
+            "sine",
+            "square",
+            "triangle"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "order": {
+            "min": 2,
+            "max": 4
+          },
+          "amplitude_scale": {
+            "min": 0.25,
+            "max": 0.8
+          },
+          "phase": {
+            "min": 0.0,
+            "max": 6.283185307179586
+          }
+        },
+        "remove_harmonic": {
+          "enabled": true,
+          "applies_to": [
+            "sine",
+            "square",
+            "triangle"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          }
+        },
+        "modify_harmonic_phase": {
+          "enabled": true,
+          "applies_to": [
+            "sine",
+            "square",
+            "triangle"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "delta_phase": {
+            "min": 0.4712,
+            "max": 4.7124
+          }
+        },
+        "modify_modulation_depth": {
+          "enabled": true,
+          "applies_to": [
+            "sine",
+            "square",
+            "triangle"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "depth": {
+            "min": 0.05,
+            "max": 0.95
+          }
+        },
+        "modify_modulation_frequency": {
+          "enabled": true,
+          "applies_to": [
+            "sine",
+            "square",
+            "triangle"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "factor": {
+            "min": 0.15,
+            "max": 2.0
+          }
+        },
+        "modify_modulation_phase": {
+          "enabled": true,
+          "applies_to": [
+            "sine",
+            "square",
+            "triangle"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "phase": {
+            "min": 0.0,
+            "max": 6.283185307179586
+          }
+        },
+        "pulse_shift": {
+          "enabled": true,
+          "applies_to": [
+            "square",
+            "triangle"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "delta_cycle": {
+            "min": -0.35,
+            "max": 0.35
+          }
+        },
+        "pulse_width_modulation": {
+          "enabled": true,
+          "applies_to": [
+            "square",
+            "triangle"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "factor": {
+            "min": 0.5,
+            "max": 1.6
+          }
+        },
+        "wavelet_family_change": {
+          "enabled": true,
+          "applies_to": [
+            "wavelet"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "target_family_weights": {
+            "morlet": 0.22,
+            "ricker": 0.2,
+            "haar": 0.14,
+            "gaus": 0.16,
+            "mexh": 0.14,
+            "shan": 0.14
+          }
+        },
+        "wavelet_scale_change": {
+          "enabled": true,
+          "applies_to": [
+            "wavelet"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "factor": {
+            "min": 0.6,
+            "max": 1.8
+          }
+        },
+        "wavelet_shift_change": {
+          "enabled": true,
+          "applies_to": [
+            "wavelet"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "delta_shift": {
+            "min": -0.35,
+            "max": 0.35
+          }
+        },
+        "wavelet_amplitude_change": {
+          "enabled": true,
+          "applies_to": [
+            "wavelet"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "factor": {
+            "min": 0.5,
+            "max": 1.8
+          }
+        },
+        "add_wavelet": {
+          "enabled": true,
+          "applies_to": [
+            "wavelet"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          },
+          "family_weights": {
+            "morlet": 0.22,
+            "ricker": 0.2,
+            "haar": 0.14,
+            "gaus": 0.16,
+            "mexh": 0.14,
+            "shan": 0.14
+          },
+          "period": {
+            "min": 6.0,
+            "max": 120.0
+          },
+          "amplitude": {
+            "min": 0.2,
+            "max": 2.0
+          },
+          "phase": {
+            "min": 0.0,
+            "max": 6.283185307179586
+          },
+          "scale": {
+            "min": 0.08,
+            "max": 0.35
+          },
+          "shift": {
+            "min": 0.0,
+            "max": 1.0
+          }
+        },
+        "remove_wavelet": {
+          "enabled": true,
+          "applies_to": [
+            "wavelet"
+          ],
+          "window_length": {
+            "min": 8,
+            "max": 80
+          }
+        }
+      }
+    }
   },
   "debug": {
     "enable_trend": true,
@@ -166,4 +926,3 @@
     "enable_seasonal_anomaly": true
   }
 }
-

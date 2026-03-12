@@ -10,22 +10,28 @@
     <div class="app-shell">
       <header class="topbar">
         <div>
-          <p class="eyebrow">TSAD Studio</p>
-          <h1>Interactive Config and Sample Preview</h1>
-          <p class="subtle">Isolated workspace for parameter editing, randomization, and in-memory visualization.</p>
+          <p class="eyebrow" data-i18n="brand.eyebrow">TSAD Studio</p>
+          <h1 data-i18n="brand.title">Interactive Config and Sample Preview</h1>
+          <p class="subtle" data-i18n="brand.subtitle">
+            Isolated workspace for parameter editing, randomization, and in-memory visualization.
+          </p>
         </div>
         <div class="toolbar">
-          <button id="restore-defaults" class="secondary">Restore Defaults</button>
-          <button id="randomize-config" class="secondary">Random Fill All</button>
-          <button id="preview-sample" class="primary">Preview Sample</button>
+          <button id="toggle-language" class="secondary" data-i18n="toolbar.lang">中文</button>
+          <button id="open-import-modal" class="secondary" data-i18n="toolbar.import">Import Config</button>
+          <button id="restore-defaults" class="secondary" data-i18n="toolbar.restore">Restore Defaults</button>
+          <button id="randomize-config" class="secondary" data-i18n="toolbar.randomize">Random Fill All</button>
+          <button id="preview-sample" class="primary" data-i18n="toolbar.preview">Preview Sample</button>
         </div>
       </header>
 
       <main class="layout">
         <aside class="config-panel">
           <div class="panel-header">
-            <h2>Parameters</h2>
-            <p class="subtle">Every config field is editable. Labels show both a readable name and the config path.</p>
+            <h2 data-i18n="config.title">Parameters</h2>
+            <p class="subtle" data-i18n="config.subtitle">
+              Edit every config field. Small text now explains the parameter instead of repeating the raw path.
+            </p>
           </div>
           <div id="status-banner" class="status hidden"></div>
           <div id="config-form" class="form-tree"></div>
@@ -34,72 +40,178 @@
         <section class="preview-panel">
           <div class="preview-header">
             <div>
-              <h2>Sample Preview</h2>
-              <p class="subtle">Preview runs in memory and does not write files to <code>outputs/</code>.</p>
+              <h2 data-i18n="preview.title">Sample Preview</h2>
+              <p class="subtle" data-i18n="preview.subtitle">
+                Preview runs in memory and does not write files to outputs/.
+              </p>
             </div>
             <div id="summary-chips" class="summary-chips"></div>
           </div>
 
           <div class="preview-tabs">
-            <button class="tab active" data-tab="series">Series</button>
-            <button class="tab" data-tab="mask">Mask</button>
-            <button class="tab" data-tab="dag">DAG</button>
-            <button class="tab" data-tab="metadata">Metadata</button>
+            <button class="tab active" data-tab="series" data-i18n="tabs.series">Series</button>
+            <button class="tab" data-tab="mask" data-i18n="tabs.mask">Mask</button>
+            <button class="tab" data-tab="dag" data-i18n="tabs.dag">DAG</button>
+            <button class="tab" data-tab="metadata" data-i18n="tabs.metadata">Metadata</button>
           </div>
 
           <div id="tab-series" class="tab-panel active">
-            <div class="panel-controls">
-              <label>
-                Dataset
-                <select id="dataset-select">
-                  <option value="observed">Final Observed</option>
-                  <option value="stage2_normal">Stage2 Normal</option>
-                  <option value="stage1_baseline">Stage1 Baseline</option>
-                </select>
-              </label>
-              <label>
-                Max Nodes
-                <select id="max-nodes-select">
-                  <option value="1">1</option>
-                  <option value="3">3</option>
-                  <option value="6" selected>6</option>
-                  <option value="12">12</option>
-                  <option value="20">20</option>
-                </select>
-              </label>
+            <div class="series-layout">
+              <div class="series-main">
+                <div class="canvas-card hero-card">
+                  <div class="hero-header">
+                    <div class="hero-copy">
+                      <p class="hero-kicker" data-i18n="preview.heroEyebrow">Focused View</p>
+                      <h3 id="series-title">Final Observed</h3>
+                      <p id="series-subtitle" class="subtle compact"></p>
+                    </div>
+                    <div class="panel-controls panel-controls-hero">
+                      <label>
+                        <span data-i18n="preview.dataset">Dataset</span>
+                        <select id="dataset-select"></select>
+                      </label>
+                      <label>
+                        <span data-i18n="preview.maxNodes">Max Nodes</span>
+                        <select id="max-nodes-select">
+                          <option value="1">1</option>
+                          <option value="3">3</option>
+                          <option value="6" selected>6</option>
+                          <option value="12">12</option>
+                          <option value="20">20</option>
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                  <div id="series-badges" class="hero-badges"></div>
+                  <canvas id="series-canvas" width="980" height="460"></canvas>
+                  <div id="series-footer" class="series-footer"></div>
+                </div>
+              </div>
+
+              <aside class="series-sidebar">
+                <section class="inspector-card inspector-card-primary">
+                  <div class="card-heading-row">
+                    <div>
+                      <p class="hero-kicker compact-kicker" data-i18n="preview.currentLayer">Current Layer</p>
+                      <h3 data-i18n="preview.layerSummary">Layer Summary</h3>
+                    </div>
+                    <span id="dataset-stage-pill" class="stage-pill"></span>
+                  </div>
+                  <div id="dataset-hint" class="dataset-hint"></div>
+                </section>
+
+                <section class="inspector-card">
+                  <div class="card-heading-row">
+                    <div>
+                      <p class="hero-kicker compact-kicker" data-i18n="preview.pipelineRail">Pipeline Inspector</p>
+                      <h3 data-i18n="preview.stageFlow">Stage Flow</h3>
+                    </div>
+                  </div>
+                  <div id="pipeline-rail" class="pipeline-rail"></div>
+                </section>
+
+                <section class="inspector-card">
+                  <div class="card-heading-row">
+                    <div>
+                      <p class="hero-kicker compact-kicker" data-i18n="preview.nodes">Node Filter</p>
+                      <h3 data-i18n="preview.nodeLegend">Interactive Legend</h3>
+                    </div>
+                    <div class="card-actions">
+                      <button id="reset-node-selection" class="ghost" type="button" data-i18n="preview.resetNodes">
+                        First N
+                      </button>
+                      <button id="select-all-nodes" class="ghost" type="button" data-i18n="preview.allNodes">All</button>
+                    </div>
+                  </div>
+                  <p class="subtle compact" data-i18n="preview.nodesHint">
+                    Choose which nodes are visible in the current chart.
+                  </p>
+                  <div id="node-selector" class="node-selector"></div>
+                </section>
+              </aside>
             </div>
-            <div id="node-selector" class="node-selector"></div>
-            <canvas id="series-canvas" width="980" height="420"></canvas>
           </div>
 
           <div id="tab-mask" class="tab-panel">
             <div class="panel-controls">
-              <p class="subtle">Binary point mask over time for selected nodes.</p>
+              <p class="subtle" data-i18n="mask.subtitle">Binary point mask over time for selected nodes.</p>
             </div>
-            <canvas id="mask-canvas" width="980" height="260"></canvas>
+            <div class="canvas-card">
+              <canvas id="mask-canvas" width="980" height="260"></canvas>
+            </div>
           </div>
 
           <div id="tab-dag" class="tab-panel">
             <div class="panel-controls">
-              <p class="subtle">Arrow direction is parent → child.</p>
+              <p class="subtle" data-i18n="dag.subtitle">Arrow direction is parent to child.</p>
             </div>
-            <svg id="dag-svg" viewBox="0 0 980 420" class="dag-svg"></svg>
+            <div class="canvas-card">
+              <svg id="dag-svg" viewBox="0 0 980 420" class="dag-svg"></svg>
+            </div>
           </div>
 
           <div id="tab-metadata" class="tab-panel">
-            <div class="metadata-grid">
-              <section>
-                <h3>Events</h3>
-                <div id="events-table"></div>
+            <div class="metadata-layout">
+              <section class="inspector-card metadata-summary-card">
+                <div class="card-heading-row">
+                  <div>
+                    <h3 data-i18n="metadata.summaryTitle">Event Overview</h3>
+                    <p class="subtle" data-i18n="metadata.summarySubtitle">
+                      Counts are grouped by family, propagation mode, and target component.
+                    </p>
+                  </div>
+                </div>
+                <div id="event-summary" class="event-summary-grid"></div>
               </section>
-              <section>
-                <h3>Raw Metadata</h3>
-                <pre id="metadata-json" class="json-box"></pre>
-              </section>
+
+              <div class="metadata-grid">
+                <section class="inspector-card metadata-events-card">
+                  <div class="card-heading-row">
+                    <div>
+                      <h3 data-i18n="metadata.eventsTitle">Events</h3>
+                      <p class="subtle" data-i18n="metadata.eventsSubtitle">
+                        Inspect realized event placement and sampled parameters.
+                      </p>
+                    </div>
+                  </div>
+                  <div id="events-table" class="event-list"></div>
+                </section>
+
+                <details class="inspector-card metadata-raw-card">
+                  <summary class="metadata-raw-summary">
+                    <div>
+                      <h3 data-i18n="metadata.rawTitle">Raw Metadata</h3>
+                      <p class="subtle" data-i18n="metadata.rawHint">
+                        Open the raw JSON only when you need the full debug payload.
+                      </p>
+                    </div>
+                  </summary>
+                  <pre id="metadata-json" class="json-box"></pre>
+                </details>
+              </div>
             </div>
           </div>
         </section>
       </main>
+    </div>
+
+    <div id="import-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal="true"></div>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="import-modal-title">
+        <div class="modal-header">
+          <div>
+            <h2 id="import-modal-title" data-i18n="import.title">Import Config</h2>
+            <p class="subtle" data-i18n="import.subtitle">
+              Paste a JSON or YAML config. The app will validate it and merge missing fields with defaults.
+            </p>
+          </div>
+          <button id="close-import-modal" class="secondary modal-close" data-i18n="import.close">Close</button>
+        </div>
+        <textarea id="import-textarea" class="import-textarea" spellcheck="false"></textarea>
+        <div class="modal-actions">
+          <button id="apply-import-config" class="primary" data-i18n="import.apply">Apply Imported Config</button>
+        </div>
+      </div>
     </div>
 
     <script src="./app.js" type="module"></script>

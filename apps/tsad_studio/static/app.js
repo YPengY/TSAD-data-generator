@@ -1,38 +1,375 @@
+const LOCALE_TEXT = {
+  en: {
+    "brand.eyebrow": "TSAD Studio",
+    "brand.title": "Interactive Config and Sample Preview",
+    "brand.subtitle": "Isolated workspace for parameter editing, randomization, and in-memory visualization.",
+    "toolbar.import": "Import Config",
+    "toolbar.restore": "Restore Defaults",
+    "toolbar.randomize": "Random Fill All",
+    "toolbar.preview": "Preview Sample",
+    "config.title": "Parameters",
+    "config.subtitle": "Edit every config field. Small text now explains the parameter instead of repeating the raw path.",
+    "preview.title": "Sample Preview",
+    "preview.subtitle": "Preview runs in memory and does not write files to outputs/.",
+    "tabs.series": "Series",
+    "tabs.mask": "Mask",
+    "tabs.dag": "DAG",
+    "tabs.metadata": "Metadata",
+    "preview.dataset": "Dataset",
+    "preview.maxNodes": "Max Nodes",
+    "preview.currentLayer": "Current Layer",
+    "preview.pipelineRail": "Pipeline Inspector",
+    "preview.nodes": "Node Filter",
+    "preview.nodesHint": "Choose which nodes are visible in the current chart.",
+    "mask.subtitle": "Binary point mask over time for selected nodes.",
+    "dag.subtitle": "Arrow direction is parent to child.",
+    "metadata.summaryTitle": "Event Overview",
+    "metadata.summarySubtitle": "Counts are grouped by family, propagation mode, and target component.",
+    "metadata.eventsTitle": "Events",
+    "metadata.eventsSubtitle": "Inspect realized event placement and sampled parameters.",
+    "metadata.rawTitle": "Raw Metadata",
+    "metadata.rawHint": "Open the raw JSON only when you need the full debug payload.",
+    "metadata.metric.events": "Event count",
+    "metadata.metric.family": "Family",
+    "metadata.metric.propagation": "Propagation",
+    "metadata.metric.target": "Target component",
+    "import.title": "Import Config",
+    "import.subtitle": "Paste a JSON or YAML config. The app will validate it and merge missing fields with defaults.",
+    "import.close": "Close",
+    "import.apply": "Apply Imported Config",
+    "import.placeholder":
+      "{\n  \"seed\": 17,\n  \"sequence_length\": {\"min\": 256, \"max\": 256},\n  \"anomaly\": {\n    \"local\": {\n      \"budget\": {\"events_per_sample\": {\"min\": 2, \"max\": 3}},\n      \"defaults\": {\"endogenous_p\": 0.65}\n    }\n  }\n}",
+    "common.enabled": "Enabled",
+    "common.yes": "Yes",
+    "common.no": "No",
+    "common.node": "node",
+    "common.absMean": "Abs mean",
+    "common.absMax": "Abs max",
+    "common.length": "Length",
+    "common.selectedNodes": "Selected nodes",
+    "common.group": "Group",
+    "common.kind": "Kind",
+    "common.window": "Window",
+    "common.active": "Active",
+    "common.pipelineStage": "Pipeline stage",
+    "status.defaultsRestored": "Defaults restored.",
+    "status.randomizing": "Randomizing all parameters...",
+    "status.randomized": "All parameters were filled with a valid randomized config.",
+    "status.previewing": "Generating in-memory preview...",
+    "status.previewed": "Preview updated.",
+    "status.importing": "Importing and validating config...",
+    "status.imported": "Imported config applied.",
+    "status.previewEmpty": "Generate a preview to inspect events and metadata.",
+    "status.layerEmpty": "Run a preview to inspect stage outputs and dataset stats.",
+    "status.eventsEmpty": "No realized events for this preview.",
+    "status.loadFailed": "Failed to load studio.",
+    "summary.length": "Length",
+    "summary.features": "Features",
+    "summary.events": "Events",
+    "summary.local": "Local",
+    "summary.seasonal": "Seasonal",
+    "summary.endogenous": "Endogenous",
+    "summary.anomalous": "Anomalous",
+    "stage.stage1": "Stage 1",
+    "stage.stage1.detail": "Baseline built from trend, seasonality, and noise.",
+    "stage.causal": "Causal",
+    "stage.causal.detail": "DAG + ARX mixing delta applied to baseline outputs.",
+    "stage.local": "Local",
+    "stage.local.detail": "Local anomaly templates injected before and after causal propagation.",
+    "stage.seasonal": "Seasonal",
+    "stage.seasonal.detail": "Seasonal component operators converted into seasonal deltas.",
+    "stage.final": "Final",
+    "stage.final.detail": "Observed sample relative to the normal reference path.",
+    "dataset.defaultDescription": "Inspect how this layer contributes to the final observed series.",
+    "dataset.observed.description": "The final anomalous observation after baseline synthesis, causal mixing, and all anomaly injections.",
+    "dataset.final_anomaly_delta.description": "Difference between the final observed series and the causal normal reference.",
+    "dataset.stage2_normal.description": "Normal reference after causal propagation with the same baseline and graph settings.",
+    "dataset.stage2_causal_effect.description": "Pure causal mixing contribution measured against the Stage 1 baseline.",
+    "dataset.stage3_pre_causal_local_delta.description": "Local anomaly contribution injected before the causal simulator.",
+    "dataset.stage3_post_causal_local_delta.description": "Local anomaly contribution injected directly on observed outputs.",
+    "dataset.stage3_seasonal_delta.description": "Seasonal-component delta generated by seasonal anomaly operators.",
+    "dataset.stage1_baseline.description": "Combined baseline signal before causal structure and anomalies are applied.",
+    "dataset.stage1_trend.description": "Trend component only.",
+    "dataset.stage1_seasonality.description": "Seasonality component only.",
+    "dataset.stage1_noise.description": "Noise component only.",
+    "event.total": "total",
+    "event.local": "local",
+    "event.seasonal": "seasonal",
+    "event.endogenous": "endogenous",
+    "event.target": "Target",
+    "event.affected": "Affected",
+    "event.rootCause": "Root cause",
+    "event.params": "Params",
+    "validation.configure": "Configure this parameter.",
+  },
+  zh: {
+    "brand.eyebrow": "TSAD Studio",
+    "brand.title": "交互式参数配置与样本预览",
+    "brand.subtitle": "用于参数编辑、随机填充和内存预览的独立调试工作区。",
+    "toolbar.import": "导入配置",
+    "toolbar.restore": "恢复默认",
+    "toolbar.randomize": "一键随机填充",
+    "toolbar.preview": "预览样本",
+    "config.title": "参数配置",
+    "config.subtitle": "可以编辑全部配置项。参数名下方的小字改为参数解释，不再重复显示原始路径。",
+    "preview.title": "样本预览",
+    "preview.subtitle": "预览只在内存中运行，不会向 outputs/ 写入文件。",
+    "tabs.series": "序列",
+    "tabs.mask": "掩码",
+    "tabs.dag": "因果图",
+    "tabs.metadata": "元数据",
+    "preview.dataset": "数据层",
+    "preview.maxNodes": "最多节点",
+    "preview.currentLayer": "当前图层",
+    "preview.pipelineRail": "流程检查",
+    "preview.nodes": "节点筛选",
+    "preview.nodesHint": "选择当前图中需要显示的节点。",
+    "mask.subtitle": "选中节点的逐时刻二值点级掩码。",
+    "dag.subtitle": "箭头方向表示从父节点指向子节点。",
+    "metadata.summaryTitle": "事件总览",
+    "metadata.summarySubtitle": "按异常家族、传播方式和目标组件汇总当前样本的事件数量。",
+    "metadata.eventsTitle": "事件",
+    "metadata.eventsSubtitle": "查看每个已实现事件的落点、传播属性和采样参数。",
+    "metadata.rawTitle": "原始元数据",
+    "metadata.rawHint": "只在需要完整调试载荷时展开原始 JSON。",
+    "metadata.metric.events": "事件数",
+    "metadata.metric.family": "异常家族",
+    "metadata.metric.propagation": "传播方式",
+    "metadata.metric.target": "目标组件",
+    "import.title": "导入配置",
+    "import.subtitle": "粘贴 JSON 或 YAML 配置。系统会先校验，再用默认值补齐缺失字段。",
+    "import.close": "关闭",
+    "import.apply": "应用导入配置",
+    "import.placeholder":
+      "{\n  \"seed\": 17,\n  \"sequence_length\": {\"min\": 256, \"max\": 256},\n  \"anomaly\": {\n    \"local\": {\n      \"budget\": {\"events_per_sample\": {\"min\": 2, \"max\": 3}},\n      \"defaults\": {\"endogenous_p\": 0.65}\n    }\n  }\n}",
+    "common.enabled": "启用",
+    "common.yes": "是",
+    "common.no": "否",
+    "common.node": "节点",
+    "common.absMean": "绝对均值",
+    "common.absMax": "绝对最大值",
+    "common.length": "长度",
+    "common.selectedNodes": "已选节点",
+    "common.group": "分组",
+    "common.kind": "类型",
+    "common.window": "窗口",
+    "common.active": "当前",
+    "common.pipelineStage": "流程阶段",
+    "status.defaultsRestored": "已恢复默认配置。",
+    "status.randomizing": "正在随机填充全部参数...",
+    "status.randomized": "已生成一份合法的随机配置并填入表单。",
+    "status.previewing": "正在生成内存预览...",
+    "status.previewed": "预览已更新。",
+    "status.importing": "正在导入并校验配置...",
+    "status.imported": "导入配置已应用。",
+    "status.previewEmpty": "先生成一次预览，才能查看事件和元数据。",
+    "status.layerEmpty": "先运行预览，再查看各阶段输出和图层统计。",
+    "status.eventsEmpty": "这次预览没有实际落地的事件。",
+    "status.loadFailed": "Studio 加载失败。",
+    "summary.length": "长度",
+    "summary.features": "特征数",
+    "summary.events": "事件数",
+    "summary.local": "局部异常",
+    "summary.seasonal": "季节异常",
+    "summary.endogenous": "内生",
+    "summary.anomalous": "是否异常",
+    "stage.stage1": "阶段 1",
+    "stage.stage1.detail": "由趋势、季节性和噪声合成基础序列。",
+    "stage.causal": "因果",
+    "stage.causal.detail": "在 DAG + ARX 下完成跨节点混合传播。",
+    "stage.local": "局部异常",
+    "stage.local.detail": "局部异常模板会在因果前后两个位置分别注入。",
+    "stage.seasonal": "季节异常",
+    "stage.seasonal.detail": "季节组件算子先转成 seasonal delta，再叠回观测序列。",
+    "stage.final": "最终输出",
+    "stage.final.detail": "展示最终观测结果及其相对正常路径的偏移。",
+    "dataset.defaultDescription": "查看当前图层在最终观测序列中的角色和贡献。",
+    "dataset.observed.description": "最终异常观测序列，已经包含基线、因果传播和全部异常注入。",
+    "dataset.final_anomaly_delta.description": "最终观测序列相对于 Stage2 正常参考的差值。",
+    "dataset.stage2_normal.description": "在相同基线和因果结构下生成的正常参考序列。",
+    "dataset.stage2_causal_effect.description": "相对于 Stage1 基线，纯因果混合带来的变化量。",
+    "dataset.stage3_pre_causal_local_delta.description": "在因果传播前注入的局部异常增量。",
+    "dataset.stage3_post_causal_local_delta.description": "在观测输出层直接注入的局部异常增量。",
+    "dataset.stage3_seasonal_delta.description": "由季节异常算子产生的季节分量增量。",
+    "dataset.stage1_baseline.description": "因果结构和异常注入之前的合成基线。",
+    "dataset.stage1_trend.description": "仅趋势组件。",
+    "dataset.stage1_seasonality.description": "仅季节组件。",
+    "dataset.stage1_noise.description": "仅噪声组件。",
+    "event.total": "总数",
+    "event.local": "局部",
+    "event.seasonal": "季节",
+    "event.endogenous": "内生",
+    "event.target": "目标组件",
+    "event.affected": "影响节点",
+    "event.rootCause": "根因节点",
+    "event.params": "参数",
+    "validation.configure": "请配置该参数。",
+  },
+};
+
+const TOKEN_LABELS = {
+  en: {
+    none: "None",
+    sine: "Sine",
+    square: "Square",
+    triangle: "Triangle",
+    wavelet: "Wavelet",
+    increase: "Increase",
+    decrease: "Decrease",
+    keep_steady: "Keep Steady",
+    multiple: "Multiple",
+    arima: "ARIMA",
+    low: "Low",
+    high: "High",
+    almost_none: "Almost None",
+    moderate: "Moderate",
+    local: "Local",
+    seasonal: "Seasonal",
+    observed: "Observed",
+    seasonality: "Seasonality",
+    baseline: "Baseline",
+    endogenous: "Endogenous",
+    exogenous: "Exogenous",
+  },
+  zh: {
+    none: "无",
+    sine: "正弦",
+    square: "方波",
+    triangle: "三角波",
+    wavelet: "小波",
+    increase: "上升",
+    decrease: "下降",
+    keep_steady: "平稳",
+    multiple: "多段",
+    arima: "ARIMA",
+    low: "低频",
+    high: "高频",
+    almost_none: "几乎无噪声",
+    moderate: "中等",
+    local: "局部",
+    seasonal: "季节",
+    observed: "观测层",
+    seasonality: "季节组件",
+    baseline: "基线层",
+    endogenous: "内生",
+    exogenous: "外生",
+  },
+};
+
+const DATASET_LABELS = {
+  en: {
+    observed: "Final Observed",
+    final_anomaly_delta: "Observed - Stage2 Normal",
+    stage2_normal: "Stage2 Normal",
+    stage2_causal_effect: "Stage2 Normal - Stage1 Baseline",
+    stage3_pre_causal_local_delta: "Pre-Causal Local Delta",
+    stage3_post_causal_local_delta: "Post-Causal Local Delta",
+    stage3_seasonal_delta: "Seasonal Delta",
+    stage1_baseline: "Stage1 Baseline",
+    stage1_trend: "Stage1 Trend",
+    stage1_seasonality: "Stage1 Seasonality",
+    stage1_noise: "Stage1 Noise",
+  },
+  zh: {
+    observed: "最终观测",
+    final_anomaly_delta: "最终观测 - Stage2 正常参考",
+    stage2_normal: "Stage2 正常参考",
+    stage2_causal_effect: "Stage2 正常参考 - Stage1 基线",
+    stage3_pre_causal_local_delta: "因果前局部异常增量",
+    stage3_post_causal_local_delta: "因果后局部异常增量",
+    stage3_seasonal_delta: "季节异常增量",
+    stage1_baseline: "Stage1 基线",
+    stage1_trend: "Stage1 趋势",
+    stage1_seasonality: "Stage1 季节性",
+    stage1_noise: "Stage1 噪声",
+  },
+};
+
+const DATASET_GROUP_LABELS = {
+  en: { Final: "Final", Causal: "Causal", Local: "Local", Seasonal: "Seasonal", Stage1: "Stage 1" },
+  zh: { Final: "最终输出", Causal: "因果", Local: "局部异常", Seasonal: "季节异常", Stage1: "阶段 1" },
+};
+
+const DATASET_KIND_LABELS = {
+  en: { signal: "Signal", delta: "Delta", component: "Component" },
+  zh: { signal: "信号", delta: "增量", component: "组件" },
+};
+
+Object.assign(LOCALE_TEXT.en, {
+  "preview.heroEyebrow": "Focused View",
+  "preview.layerSummary": "Layer Summary",
+  "preview.stageFlow": "Stage Flow",
+  "preview.nodeLegend": "Interactive Legend",
+  "preview.resetNodes": "First N",
+  "preview.allNodes": "All",
+  "preview.shadedWindows": "Shaded windows",
+});
+
+Object.assign(LOCALE_TEXT.zh, {
+  "preview.heroEyebrow": "当前视图",
+  "preview.layerSummary": "图层摘要",
+  "preview.stageFlow": "阶段流程",
+  "preview.nodeLegend": "交互图例",
+  "preview.resetNodes": "前 N 个",
+  "preview.allNodes": "全部",
+  "preview.shadedWindows": "阴影窗口",
+});
+
 const state = {
   defaults: null,
   config: null,
   ui: null,
   preview: null,
+  locale: "en",
   selectedNodes: [],
   activeTab: "series",
   configVersion: 0,
   requestIds: {
     randomize: 0,
     preview: 0,
+    importConfig: 0,
   },
   pending: {
     randomize: false,
     preview: false,
+    importConfig: false,
   },
 };
 
 const dom = {
   form: document.getElementById("config-form"),
   status: document.getElementById("status-banner"),
+  toggleLanguage: document.getElementById("toggle-language"),
+  openImportModal: document.getElementById("open-import-modal"),
   restore: document.getElementById("restore-defaults"),
   randomize: document.getElementById("randomize-config"),
   preview: document.getElementById("preview-sample"),
   summaryChips: document.getElementById("summary-chips"),
   datasetSelect: document.getElementById("dataset-select"),
+  seriesTitle: document.getElementById("series-title"),
+  seriesSubtitle: document.getElementById("series-subtitle"),
+  seriesBadges: document.getElementById("series-badges"),
+  seriesFooter: document.getElementById("series-footer"),
+  datasetHint: document.getElementById("dataset-hint"),
+  datasetStagePill: document.getElementById("dataset-stage-pill"),
+  pipelineRail: document.getElementById("pipeline-rail"),
   maxNodesSelect: document.getElementById("max-nodes-select"),
   nodeSelector: document.getElementById("node-selector"),
+  resetNodeSelection: document.getElementById("reset-node-selection"),
+  selectAllNodes: document.getElementById("select-all-nodes"),
   seriesCanvas: document.getElementById("series-canvas"),
   maskCanvas: document.getElementById("mask-canvas"),
   dagSvg: document.getElementById("dag-svg"),
   metadataJson: document.getElementById("metadata-json"),
+  eventSummary: document.getElementById("event-summary"),
   eventsTable: document.getElementById("events-table"),
   tabs: Array.from(document.querySelectorAll(".tab")),
   tabPanels: Array.from(document.querySelectorAll(".tab-panel")),
+  importModal: document.getElementById("import-modal"),
+  closeImportModal: document.getElementById("close-import-modal"),
+  importTextarea: document.getElementById("import-textarea"),
+  applyImportConfig: document.getElementById("apply-import-config"),
+  translatables: Array.from(document.querySelectorAll("[data-i18n]")),
 };
 
 const palette = [
@@ -56,15 +393,47 @@ async function init() {
   state.ui = payload.ui;
   state.configVersion = 1;
   bindEvents();
+  applyLocale();
   renderForm();
   clearPreview();
   updateToolbarState();
 }
 
 function bindEvents() {
+  dom.toggleLanguage.addEventListener("click", () => {
+    state.locale = state.locale === "en" ? "zh" : "en";
+    applyLocale();
+    renderForm();
+    if (state.preview) {
+      renderPreview();
+    } else {
+      clearPreview();
+    }
+  });
+
+  dom.openImportModal.addEventListener("click", () => {
+    if (isBusy()) {
+      return;
+    }
+    dom.importTextarea.value = JSON.stringify(state.config, null, 2);
+    openImportModal();
+  });
+
+  dom.closeImportModal.addEventListener("click", closeImportModal);
+  dom.importModal.addEventListener("click", (event) => {
+    if (event.target instanceof HTMLElement && event.target.dataset.closeModal === "true") {
+      closeImportModal();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !dom.importModal.classList.contains("hidden")) {
+      closeImportModal();
+    }
+  });
+
   dom.restore.addEventListener("click", () => {
     replaceConfig(deepClone(state.defaults));
-    setStatus("Defaults restored.", "ok");
+    setStatus(t("status.defaultsRestored"), "ok");
   });
 
   dom.randomize.addEventListener("click", async () => {
@@ -74,7 +443,7 @@ function bindEvents() {
     const requestId = ++state.requestIds.randomize;
     const startedVersion = state.configVersion;
     setPending("randomize", true);
-    setStatus("Randomizing all parameters...", "ok");
+    setStatus(t("status.randomizing"), "ok");
     try {
       const response = await fetch("/api/randomize", {
         method: "POST",
@@ -83,19 +452,19 @@ function bindEvents() {
       });
       const payload = await response.json();
       if (!response.ok) {
-        setStatus(payload.error ?? "Randomization failed.", "error");
+        setStatus(payload.error ?? t("status.randomizing"), "error");
         return;
       }
       if (requestId !== state.requestIds.randomize || state.configVersion !== startedVersion) {
         return;
       }
       replaceConfig(payload.config);
-      setStatus("All parameters were filled with a valid randomized config.", "ok");
+      setStatus(t("status.randomized"), "ok");
     } catch (error) {
       if (requestId !== state.requestIds.randomize) {
         return;
       }
-      setStatus(error.message ?? "Randomization failed.", "error");
+      setStatus(error.message ?? t("status.randomizing"), "error");
     } finally {
       if (requestId === state.requestIds.randomize) {
         setPending("randomize", false);
@@ -111,7 +480,7 @@ function bindEvents() {
     const startedVersion = state.configVersion;
     const requestConfig = deepClone(state.config);
     setPending("preview", true);
-    setStatus("Generating in-memory preview...", "ok");
+    setStatus(t("status.previewing"), "ok");
     try {
       const response = await fetch("/api/preview", {
         method: "POST",
@@ -120,23 +489,21 @@ function bindEvents() {
       });
       const payload = await response.json();
       if (!response.ok) {
-        setStatus(payload.error ?? "Preview failed.", "error");
+        setStatus(payload.error ?? t("status.previewing"), "error");
         return;
       }
       if (requestId !== state.requestIds.preview || state.configVersion !== startedVersion) {
         return;
       }
       state.preview = payload.preview;
-      const featureCount = state.preview.summary.num_features;
-      const maxNodes = Number(dom.maxNodesSelect.value);
-      state.selectedNodes = Array.from({ length: Math.min(featureCount, maxNodes) }, (_, index) => index);
+      resetNodeSelection();
       renderPreview();
-      setStatus("Preview updated.", "ok");
+      setStatus(t("status.previewed"), "ok");
     } catch (error) {
       if (requestId !== state.requestIds.preview) {
         return;
       }
-      setStatus(error.message ?? "Preview failed.", "error");
+      setStatus(error.message ?? t("status.previewing"), "error");
     } finally {
       if (requestId === state.requestIds.preview) {
         setPending("preview", false);
@@ -144,18 +511,81 @@ function bindEvents() {
     }
   });
 
-  dom.datasetSelect.addEventListener("change", renderSeries);
-  dom.maxNodesSelect.addEventListener("change", () => {
+  dom.applyImportConfig.addEventListener("click", async () => {
+    const requestId = ++state.requestIds.importConfig;
+    const payloadText = dom.importTextarea.value.trim();
+    if (!payloadText) {
+      setStatus(buildValueRequiredMessage(t("import.title")), "error");
+      return;
+    }
+    setPending("importConfig", true);
+    setStatus(t("status.importing"), "ok");
+    try {
+      const response = await fetch("/api/import-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: payloadText }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        setStatus(payload.error ?? t("status.importing"), "error");
+        return;
+      }
+      if (requestId !== state.requestIds.importConfig) {
+        return;
+      }
+      replaceConfig(payload.config);
+      closeImportModal();
+      setStatus(t("status.imported"), "ok");
+    } catch (error) {
+      if (requestId !== state.requestIds.importConfig) {
+        return;
+      }
+      setStatus(error.message ?? t("status.importing"), "error");
+    } finally {
+      if (requestId === state.requestIds.importConfig) {
+        setPending("importConfig", false);
+      }
+    }
+  });
+
+  dom.datasetSelect.addEventListener("change", () => {
+    renderSeries();
+    renderPipelineRail();
+  });
+
+  dom.resetNodeSelection.addEventListener("click", () => {
     if (!state.preview) {
       return;
     }
-    const featureCount = state.preview.summary.num_features;
-    const maxNodes = Number(dom.maxNodesSelect.value);
-    state.selectedNodes = Array.from({ length: Math.min(featureCount, maxNodes) }, (_, index) => index);
+    resetNodeSelection();
     renderNodeSelector();
     renderSeries();
     renderMask();
     renderDag();
+  });
+
+  dom.selectAllNodes.addEventListener("click", () => {
+    if (!state.preview) {
+      return;
+    }
+    state.selectedNodes = Array.from({ length: state.preview.summary.num_features }, (_, index) => index);
+    renderNodeSelector();
+    renderSeries();
+    renderMask();
+    renderDag();
+  });
+
+  dom.maxNodesSelect.addEventListener("change", () => {
+    if (!state.preview) {
+      return;
+    }
+    resetNodeSelection();
+    renderNodeSelector();
+    renderSeries();
+    renderMask();
+    renderDag();
+    updateDatasetHint(dom.datasetSelect.value);
   });
 
   dom.tabs.forEach((tab) => {
@@ -167,6 +597,31 @@ function bindEvents() {
   });
 }
 
+function applyLocale() {
+  dom.translatables.forEach((element) => {
+    if (element.id === "toggle-language") {
+      return;
+    }
+    const key = element.dataset.i18n;
+    if (key) {
+      element.textContent = t(key);
+    }
+  });
+  dom.toggleLanguage.textContent = state.locale === "en" ? "中文" : "English";
+  dom.importTextarea.placeholder = t("import.placeholder");
+  document.documentElement.lang = state.locale === "zh" ? "zh-CN" : "en";
+}
+
+function resetNodeSelection() {
+  if (!state.preview) {
+    state.selectedNodes = [];
+    return;
+  }
+  const featureCount = state.preview.summary.num_features;
+  const maxNodes = Number(dom.maxNodesSelect.value);
+  state.selectedNodes = Array.from({ length: Math.min(featureCount, maxNodes) }, (_, index) => index);
+}
+
 function renderForm() {
   dom.form.innerHTML = "";
   dom.form.appendChild(renderNode(state.config, "", 0));
@@ -176,21 +631,28 @@ function renderNode(value, path, depth) {
   if (Array.isArray(value)) {
     return renderArrayField(value, path);
   }
-
   if (isPlainObject(value)) {
     const details = document.createElement("details");
     details.className = "section";
+    details.dataset.path = path || "root";
+    if (path.startsWith("anomaly.")) {
+      details.classList.add("section-anomaly");
+    }
+    if (/^anomaly\.(local|seasonal)\.per_type(\.|$)/.test(path)) {
+      details.classList.add("section-compact");
+    }
     if (depth < 2 || path === "") {
       details.open = true;
     }
 
     const summary = document.createElement("summary");
-    summary.innerHTML = `<span>${getLabel(path || "root")}</span><span class="field-path">${path || "root"}</span>`;
+    const summaryPath = path || "root";
+    summary.title = summaryPath;
+    summary.appendChild(makeSummaryBlock(summaryPath));
     details.appendChild(summary);
 
     const body = document.createElement("div");
     body.className = "section-body field-grid";
-
     Object.entries(value).forEach(([key, child]) => {
       const childPath = path ? `${path}.${key}` : key;
       if (isLeaf(child)) {
@@ -199,11 +661,9 @@ function renderNode(value, path, depth) {
         body.appendChild(renderNode(child, childPath, depth + 1));
       }
     });
-
     details.appendChild(body);
     return details;
   }
-
   return renderLeafField(value, path);
 }
 
@@ -215,11 +675,41 @@ function renderLeafField(value, path) {
   if (typeof value === "boolean") {
     const checkbox = document.createElement("label");
     checkbox.className = "checkbox-pill";
-    checkbox.innerHTML = `<input type="checkbox" ${value ? "checked" : ""} /> Enabled`;
+    checkbox.innerHTML = `<input type="checkbox" ${value ? "checked" : ""} /> ${t("common.enabled")}`;
     checkbox.querySelector("input").addEventListener("change", (event) => {
       applyConfigChange(path, event.target.checked);
     });
     wrapper.appendChild(checkbox);
+    return wrapper;
+  }
+
+  const selectOptions = state.ui.selectOptions?.[path] ?? null;
+  if (Array.isArray(selectOptions) && typeof value === "string") {
+    const select = document.createElement("select");
+    const resolvedOptions = selectOptions.includes(value) ? selectOptions : [...selectOptions, value];
+    resolvedOptions.forEach((option) => {
+      const item = document.createElement("option");
+      item.value = option;
+      item.textContent = formatOptionLabel(path, option);
+      item.selected = option === value;
+      select.appendChild(item);
+    });
+    select.addEventListener("change", () => {
+      applyConfigChange(path, select.value);
+    });
+    wrapper.appendChild(select);
+    return wrapper;
+  }
+
+  if (typeof value === "string" || value === null) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = value ?? "";
+    input.dataset.path = path;
+    input.addEventListener("change", () => {
+      applyConfigChange(path, input.value);
+    });
+    wrapper.appendChild(input);
     return wrapper;
   }
 
@@ -247,15 +737,37 @@ function renderArrayField(value, path) {
   wrapper.className = "field";
   wrapper.appendChild(makeLabelBlock(path));
 
-  const options = state.ui.multiSelectOptions[path] ?? value;
+  const options = state.ui.multiSelectOptions?.[path] ?? null;
+  if (!Array.isArray(options)) {
+    const textarea = document.createElement("textarea");
+    textarea.className = "array-textarea";
+    textarea.rows = Math.max(3, Math.min(6, value.length + 1));
+    textarea.value = JSON.stringify(value, null, 2);
+    textarea.addEventListener("change", () => {
+      try {
+        const parsed = JSON.parse(textarea.value);
+        if (!Array.isArray(parsed)) {
+          throw new Error("Config array editor expects a JSON array.");
+        }
+        applyConfigChange(path, parsed);
+      } catch (error) {
+        setStatus(error.message, "error");
+        textarea.value = JSON.stringify(getAtPath(state.config, path), null, 2);
+      }
+    });
+    wrapper.appendChild(textarea);
+    return wrapper;
+  }
+
   const group = document.createElement("div");
   group.className = "checkbox-group";
 
   options.forEach((option) => {
     const chip = document.createElement("label");
     chip.className = "checkbox-pill";
+    chip.title = option;
     const checked = value.includes(option) ? "checked" : "";
-    chip.innerHTML = `<input type="checkbox" value="${option}" ${checked} /> ${option}`;
+    chip.innerHTML = `<input type="checkbox" value="${option}" ${checked} /> ${formatOptionLabel(path, option)}`;
     chip.querySelector("input").addEventListener("change", () => {
       const current = new Set(getAtPath(state.config, path));
       if (current.has(option)) {
@@ -276,16 +788,32 @@ function renderArrayField(value, path) {
   return wrapper;
 }
 
+function makeSummaryBlock(path) {
+  const block = document.createElement("div");
+  block.className = "summary-block";
+  const title = document.createElement("div");
+  title.className = "summary-title";
+  title.textContent = getLabel(path);
+  const description = document.createElement("div");
+  description.className = "summary-description";
+  description.textContent = getDescription(path);
+  block.appendChild(title);
+  block.appendChild(description);
+  return block;
+}
+
 function makeLabelBlock(path) {
   const block = document.createElement("div");
+  block.className = "field-header";
+  block.title = path;
   const label = document.createElement("div");
   label.className = "field-label";
   label.textContent = getLabel(path);
-  const pathLabel = document.createElement("div");
-  pathLabel.className = "field-path";
-  pathLabel.textContent = path;
+  const description = document.createElement("div");
+  description.className = "field-description";
+  description.textContent = getDescription(path);
   block.appendChild(label);
-  block.appendChild(pathLabel);
+  block.appendChild(description);
   return block;
 }
 
@@ -293,7 +821,9 @@ function renderPreview() {
   if (!state.preview) {
     return;
   }
+  renderDatasetCatalog();
   renderSummary();
+  renderPipelineRail();
   renderNodeSelector();
   renderSeries();
   renderMask();
@@ -305,15 +835,69 @@ function renderSummary() {
   const summary = state.preview.summary;
   dom.summaryChips.innerHTML = "";
   [
-    `Length ${summary.length}`,
-    `Features ${summary.num_features}`,
-    `Events ${summary.num_events}`,
-    `Anomalous ${summary.is_anomalous_sample ? "Yes" : "No"}`,
+    `${t("summary.length")} ${summary.length}`,
+    `${t("summary.features")} ${summary.num_features}`,
+    `${t("summary.events")} ${summary.num_events}`,
+    `${t("summary.local")} ${summary.num_local_events ?? 0}`,
+    `${t("summary.seasonal")} ${summary.num_seasonal_events ?? 0}`,
+    `${t("summary.endogenous")} ${summary.num_endogenous_events ?? 0}`,
+    `${t("summary.anomalous")} ${summary.is_anomalous_sample ? t("common.yes") : t("common.no")}`,
   ].forEach((text) => {
     const chip = document.createElement("div");
     chip.className = "chip";
     chip.textContent = text;
     dom.summaryChips.appendChild(chip);
+  });
+}
+
+function renderDatasetCatalog() {
+  if (!state.preview) {
+    return;
+  }
+  const catalog = state.preview.series_catalog ?? [];
+  const currentValue = dom.datasetSelect.value;
+  dom.datasetSelect.innerHTML = "";
+  catalog.forEach((entry) => {
+    const option = document.createElement("option");
+    option.value = entry.id;
+    option.textContent = `[${getDatasetGroupLabel(entry.group)}] ${getDatasetLabel(entry)}`;
+    dom.datasetSelect.appendChild(option);
+  });
+  const fallback = catalog.find((entry) => entry.id === "observed")?.id ?? catalog[0]?.id ?? "";
+  dom.datasetSelect.value = catalog.some((entry) => entry.id === currentValue) ? currentValue : fallback;
+}
+
+function renderPipelineRail() {
+  if (!state.preview) {
+    return;
+  }
+  const debug = state.preview.debug ?? {};
+  const stats = debug.series_stats ?? {};
+  const activeStage = getDatasetStage(dom.datasetSelect.value);
+  const cards = [
+    { stageId: "Stage1", label: t("stage.stage1"), metric: stats.stage1_baseline?.abs_mean, detail: t("stage.stage1.detail") },
+    { stageId: "Causal", label: t("stage.causal"), metric: stats.stage2_causal_effect?.abs_mean, detail: t("stage.causal.detail") },
+    {
+      stageId: "Local",
+      label: t("stage.local"),
+      metric: (stats.stage3_pre_causal_local_delta?.abs_mean ?? 0) + (stats.stage3_post_causal_local_delta?.abs_mean ?? 0),
+      detail: t("stage.local.detail"),
+    },
+    { stageId: "Seasonal", label: t("stage.seasonal"), metric: stats.stage3_seasonal_delta?.abs_mean, detail: t("stage.seasonal.detail") },
+    { stageId: "Final", label: t("stage.final"), metric: stats.final_anomaly_delta?.abs_mean, detail: t("stage.final.detail") },
+  ];
+
+  dom.pipelineRail.innerHTML = "";
+  cards.forEach((card) => {
+    const node = document.createElement("div");
+    node.className = `stage-card${card.stageId === activeStage ? " active" : ""}`;
+    node.innerHTML = `
+      <div class="stage-kicker">${card.stageId === activeStage ? t("common.active") : t("common.pipelineStage")}</div>
+      <strong>${card.label}</strong>
+      <div class="stage-metric">${t("common.absMean")} ${formatMetric(card.metric)}</div>
+      <div class="stage-detail">${card.detail}</div>
+    `;
+    dom.pipelineRail.appendChild(node);
   });
 }
 
@@ -325,8 +909,12 @@ function renderNodeSelector() {
   const featureCount = state.preview.summary.num_features;
   for (let index = 0; index < featureCount; index += 1) {
     const chip = document.createElement("label");
-    chip.className = "checkbox-pill";
-    chip.innerHTML = `<input type="checkbox" value="${index}" ${state.selectedNodes.includes(index) ? "checked" : ""} /> node ${index}`;
+    chip.className = "node-pill";
+    chip.innerHTML = `
+      <input type="checkbox" value="${index}" ${state.selectedNodes.includes(index) ? "checked" : ""} />
+      <span class="node-swatch" style="background:${palette[index % palette.length]}"></span>
+      <span>${t("common.node")} ${index}</span>
+    `;
     chip.querySelector("input").addEventListener("change", (event) => {
       const node = Number(event.target.value);
       if (event.target.checked) {
@@ -341,6 +929,7 @@ function renderNodeSelector() {
       renderSeries();
       renderMask();
       renderDag();
+      updateDatasetHint(dom.datasetSelect.value);
     });
     dom.nodeSelector.appendChild(chip);
   }
@@ -349,12 +938,18 @@ function renderNodeSelector() {
 function renderSeries() {
   if (!state.preview) {
     clearCanvas(dom.seriesCanvas);
+    renderEmptyDatasetHint();
     return;
   }
   const datasetName = dom.datasetSelect.value;
   const series = state.preview.series[datasetName];
-  const mask = state.preview.labels.point_mask_any;
-  drawLineChart(dom.seriesCanvas, series, state.selectedNodes, mask);
+  if (!series) {
+    clearCanvas(dom.seriesCanvas);
+    renderEmptyDatasetHint();
+    return;
+  }
+  updateDatasetHint(datasetName);
+  drawLineChart(dom.seriesCanvas, series, state.selectedNodes, state.preview.labels.point_mask_any);
 }
 
 function renderMask() {
@@ -374,10 +969,12 @@ function renderDag() {
 }
 
 function renderMetadata() {
+  renderEventSummary();
   dom.metadataJson.textContent = JSON.stringify(
     {
       metadata: state.preview.metadata,
       graph: state.preview.graph,
+      debug: state.preview.debug,
       labels: {
         root_cause: state.preview.labels.root_cause,
         affected_nodes: state.preview.labels.affected_nodes,
@@ -390,21 +987,198 @@ function renderMetadata() {
   const events = state.preview.labels.events ?? [];
   dom.eventsTable.innerHTML = "";
   if (events.length === 0) {
-    dom.eventsTable.innerHTML = '<p class="subtle">No realized events for this preview.</p>';
+    const placeholder = document.createElement("p");
+    placeholder.className = "subtle";
+    placeholder.textContent = t("status.eventsEmpty");
+    dom.eventsTable.appendChild(placeholder);
     return;
   }
 
   events.forEach((event) => {
     const card = document.createElement("div");
     card.className = "event-card";
-    card.innerHTML = `
-      <strong>${event.anomaly_type}</strong>
-      <div>node ${event.node}, [${event.t_start}, ${event.t_end})</div>
-      <div>affected: ${(event.affected_nodes ?? []).join(", ") || "-"}</div>
-      <div>root cause: ${event.root_cause_node ?? "-"}</div>
-    `;
+
+    const header = document.createElement("div");
+    header.className = "event-card-header";
+
+    const titleBlock = document.createElement("div");
+    titleBlock.className = "event-card-title";
+
+    const title = document.createElement("strong");
+    title.textContent = formatCodeLabel(event.anomaly_type);
+    title.title = event.anomaly_type;
+    titleBlock.appendChild(title);
+
+    const code = document.createElement("div");
+    code.className = "event-card-code";
+    code.textContent = event.anomaly_type;
+    code.title = event.anomaly_type;
+    titleBlock.appendChild(code);
+    header.appendChild(titleBlock);
+
+    const locationBadge = document.createElement("div");
+    locationBadge.className = "event-card-location";
+    locationBadge.textContent = `${t("common.node")} ${event.node}`;
+    header.appendChild(locationBadge);
+    card.appendChild(header);
+
+    const row = document.createElement("div");
+    row.className = "event-card-row";
+    [formatTokenLabel(event.family), formatTokenLabel(event.target_component), event.is_endogenous ? formatTokenLabel("endogenous") : formatTokenLabel("exogenous")].forEach(
+      (value) => {
+        const pill = document.createElement("span");
+        pill.className = "event-pill";
+        pill.textContent = value;
+        row.appendChild(pill);
+      },
+    );
+    card.appendChild(row);
+
+    const metaGrid = document.createElement("div");
+    metaGrid.className = "event-meta-grid";
+    metaGrid.appendChild(makeEventMetaItem(t("common.window"), `[${event.t_start}, ${event.t_end})`));
+    metaGrid.appendChild(makeEventMetaItem(t("event.target"), formatTokenLabel(event.target_component)));
+    metaGrid.appendChild(makeEventMetaItem(t("event.affected"), (event.affected_nodes ?? []).join(", ") || "-"));
+    metaGrid.appendChild(makeEventMetaItem(t("event.rootCause"), event.root_cause_node ?? "-"));
+    card.appendChild(metaGrid);
+
+    const paramsLabel = document.createElement("div");
+    paramsLabel.className = "event-params-label";
+    paramsLabel.textContent = t("event.params");
+    card.appendChild(paramsLabel);
+
+    const params = document.createElement("pre");
+    params.className = "event-param-box";
+    params.textContent = JSON.stringify(event.params ?? {}, null, 2);
+    card.appendChild(params);
     dom.eventsTable.appendChild(card);
   });
+}
+
+function renderEventSummary() {
+  if (!state.preview) {
+    return;
+  }
+  const summary = state.preview.debug?.event_summary ?? {};
+  const components = summary.target_components ?? {};
+  dom.eventSummary.innerHTML = "";
+  const cards = [
+    { label: t("event.total"), value: summary.total ?? 0, note: t("metadata.metric.events"), tone: "total" },
+    { label: t("event.local"), value: summary.local ?? 0, note: t("metadata.metric.family"), tone: "local" },
+    { label: t("event.seasonal"), value: summary.seasonal ?? 0, note: t("metadata.metric.family"), tone: "seasonal" },
+    { label: t("event.endogenous"), value: summary.endogenous ?? 0, note: t("metadata.metric.propagation"), tone: "endogenous" },
+    ...Object.entries(components).map(([key, value]) => ({
+      label: formatTokenLabel(key),
+      value,
+      note: t("metadata.metric.target"),
+      tone: "component",
+    })),
+  ];
+
+  cards.forEach((item) => {
+    const card = document.createElement("div");
+    card.className = `event-summary-card tone-${item.tone}`;
+
+    const note = document.createElement("div");
+    note.className = "event-summary-note";
+    note.textContent = item.note;
+    card.appendChild(note);
+
+    const value = document.createElement("div");
+    value.className = "event-summary-value";
+    value.textContent = String(item.value);
+    card.appendChild(value);
+
+    const label = document.createElement("div");
+    label.className = "event-summary-label";
+    label.textContent = item.label;
+    card.appendChild(label);
+
+    dom.eventSummary.appendChild(card);
+  });
+}
+
+function makeEventMetaItem(labelText, valueText) {
+  const item = document.createElement("div");
+  item.className = "event-meta-item";
+
+  const label = document.createElement("div");
+  label.className = "event-meta-label";
+  label.textContent = labelText;
+  item.appendChild(label);
+
+  const value = document.createElement("div");
+  value.className = "event-meta-value";
+  value.textContent = String(valueText);
+  item.appendChild(value);
+
+  return item;
+}
+
+function updateDatasetHint(datasetName) {
+  const entry = (state.preview?.series_catalog ?? []).find((item) => item.id === datasetName);
+  const stats = state.preview?.debug?.series_stats?.[datasetName];
+  if (!entry) {
+    renderEmptyDatasetHint();
+    return;
+  }
+
+  dom.seriesTitle.textContent = getDatasetLabel(entry);
+  dom.seriesSubtitle.textContent = getDatasetDescription(entry.id);
+  dom.datasetStagePill.textContent = getDatasetGroupLabel(entry.group);
+  dom.seriesBadges.innerHTML = [
+    `<span class="hero-badge"><strong>${escapeHtml(t("common.group"))}</strong>${escapeHtml(getDatasetGroupLabel(entry.group))}</span>`,
+    `<span class="hero-badge"><strong>${escapeHtml(t("common.kind"))}</strong>${escapeHtml(getDatasetKindLabel(entry.kind))}</span>`,
+    `<span class="hero-badge"><strong>${escapeHtml(t("common.absMean"))}</strong>${escapeHtml(formatMetric(stats?.abs_mean))}</span>`,
+    `<span class="hero-badge"><strong>${escapeHtml(t("common.absMax"))}</strong>${escapeHtml(formatMetric(stats?.abs_max))}</span>`,
+  ].join("");
+
+  const windowCount = countMaskWindows(state.preview.labels.point_mask_any ?? []);
+  dom.seriesFooter.innerHTML = [
+    `<span class="footer-chip">${escapeHtml(t("preview.shadedWindows"))}: ${escapeHtml(String(windowCount))}</span>`,
+    `<span class="footer-chip">${escapeHtml(t("common.selectedNodes"))}: ${escapeHtml(String(state.selectedNodes.length))}</span>`,
+    `<span class="footer-chip">${escapeHtml(t("common.length"))}: ${escapeHtml(String(state.preview.summary.length))}</span>`,
+  ].join("");
+
+  dom.datasetHint.innerHTML = `
+    <div class="dataset-header">
+      <div class="dataset-title-row">
+        <div class="dataset-title">${escapeHtml(getDatasetLabel(entry))}</div>
+        <div class="dataset-meta">
+          <span class="event-pill">${escapeHtml(getDatasetGroupLabel(entry.group))}</span>
+          <span class="event-pill">${escapeHtml(getDatasetKindLabel(entry.kind))}</span>
+        </div>
+      </div>
+      <div class="dataset-description">${escapeHtml(getDatasetDescription(entry.id))}</div>
+    </div>
+    <div class="dataset-stat-grid">
+      <div class="dataset-stat">
+        <span class="dataset-stat-label">${escapeHtml(t("common.absMean"))}</span>
+        <strong class="dataset-stat-value">${escapeHtml(formatMetric(stats?.abs_mean))}</strong>
+      </div>
+      <div class="dataset-stat">
+        <span class="dataset-stat-label">${escapeHtml(t("common.absMax"))}</span>
+        <strong class="dataset-stat-value">${escapeHtml(formatMetric(stats?.abs_max))}</strong>
+      </div>
+      <div class="dataset-stat">
+        <span class="dataset-stat-label">${escapeHtml(t("common.length"))}</span>
+        <strong class="dataset-stat-value">${escapeHtml(String(state.preview.summary.length))}</strong>
+      </div>
+      <div class="dataset-stat">
+        <span class="dataset-stat-label">${escapeHtml(t("common.selectedNodes"))}</span>
+        <strong class="dataset-stat-value">${escapeHtml(String(state.selectedNodes.length))}</strong>
+      </div>
+    </div>
+  `;
+}
+
+function renderEmptyDatasetHint() {
+  dom.seriesTitle.textContent = t("preview.title");
+  dom.seriesSubtitle.textContent = t("status.layerEmpty");
+  dom.seriesBadges.innerHTML = "";
+  dom.seriesFooter.innerHTML = "";
+  dom.datasetStagePill.textContent = "";
+  dom.datasetHint.innerHTML = `<div class="dataset-empty">${escapeHtml(t("status.layerEmpty"))}</div>`;
 }
 
 function drawLineChart(canvas, data, selectedNodes, maskAny) {
@@ -414,7 +1188,6 @@ function drawLineChart(canvas, data, selectedNodes, maskAny) {
   context.clearRect(0, 0, width, height);
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
-
   if (!data || selectedNodes.length === 0) {
     return;
   }
@@ -450,7 +1223,6 @@ function drawLineChart(canvas, data, selectedNodes, maskAny) {
   });
 
   drawAxes(context, padding, width, height, minValue, maxValue, data.length);
-
   selectedNodes.forEach((node, index) => {
     context.strokeStyle = palette[index % palette.length];
     context.lineWidth = 2;
@@ -475,7 +1247,7 @@ function drawLineChart(canvas, data, selectedNodes, maskAny) {
     context.fillStyle = palette[index % palette.length];
     context.fillRect(legendX, 8, 16, 4);
     context.fillStyle = "#1e1a16";
-    context.fillText(`node ${node}`, legendX + 22, 14);
+    context.fillText(`${t("common.node")} ${node}`, legendX + 22, 14);
   });
 }
 
@@ -489,7 +1261,6 @@ function drawAxes(context, padding, width, height, minValue, maxValue, length) {
   context.lineTo(padding.left, padding.top + plotHeight);
   context.lineTo(padding.left + plotWidth, padding.top + plotHeight);
   context.stroke();
-
   context.fillStyle = "#6f6559";
   context.font = "12px Segoe UI";
   for (let tick = 0; tick <= 4; tick += 1) {
@@ -514,7 +1285,6 @@ function drawMaskHeatmap(canvas, pointMask, selectedNodes) {
   context.clearRect(0, 0, width, height);
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
-
   if (!pointMask || selectedNodes.length === 0) {
     return;
   }
@@ -524,18 +1294,12 @@ function drawMaskHeatmap(canvas, pointMask, selectedNodes) {
   const columns = pointMask.length;
   const cellWidth = (width - padding.left - padding.right) / Math.max(1, columns);
   const cellHeight = (height - padding.top - padding.bottom) / Math.max(1, rows);
-
   selectedNodes.forEach((node, rowIndex) => {
     context.fillStyle = "#1e1a16";
-    context.fillText(`node ${node}`, 16, padding.top + rowIndex * cellHeight + cellHeight * 0.7);
+    context.fillText(`${t("common.node")} ${node}`, 16, padding.top + rowIndex * cellHeight + cellHeight * 0.7);
     for (let column = 0; column < columns; column += 1) {
       context.fillStyle = pointMask[column][node] ? "#b55232" : "#f3ebe0";
-      context.fillRect(
-        padding.left + column * cellWidth,
-        padding.top + rowIndex * cellHeight,
-        Math.max(1, cellWidth),
-        Math.max(1, cellHeight - 1),
-      );
+      context.fillRect(padding.left + column * cellWidth, padding.top + rowIndex * cellHeight, Math.max(1, cellWidth), Math.max(1, cellHeight - 1));
     }
   });
 }
@@ -631,12 +1395,17 @@ function clearPreview() {
   state.preview = null;
   state.selectedNodes = [];
   dom.summaryChips.innerHTML = "";
+  dom.datasetSelect.innerHTML = "";
+  renderEmptyDatasetHint();
+  dom.pipelineRail.innerHTML = "";
   dom.nodeSelector.innerHTML = "";
   clearCanvas(dom.seriesCanvas);
   clearCanvas(dom.maskCanvas);
   dom.dagSvg.innerHTML = "";
   dom.metadataJson.textContent = "";
-  dom.eventsTable.innerHTML = '<p class="subtle">Generate a preview to inspect events and metadata.</p>';
+  dom.eventSummary.innerHTML = "";
+  dom.eventsTable.innerHTML = `<p class="subtle">${escapeHtml(t("status.previewEmpty"))}</p>`;
+  updateToolbarState();
 }
 
 function replaceConfig(nextConfig) {
@@ -658,10 +1427,9 @@ function commitNumericInput(input, path, kind) {
   const rawValue = input.value.trim();
   if (rawValue === "") {
     input.value = formatNumericValue(getAtPath(state.config, path));
-    setStatus(`Value required for ${path}.`, "error");
+    setStatus(buildValueRequiredMessage(getLabel(path)), "error");
     return false;
   }
-
   const nextValue = Number(rawValue);
   const error = validateNumericValue(path, nextValue, kind);
   if (error) {
@@ -676,38 +1444,43 @@ function commitNumericInput(input, path, kind) {
     clearErrorStatus();
     return true;
   }
-
   applyConfigChange(path, nextValue);
   return true;
 }
 
 function validateNumericValue(path, value, kind) {
+  const label = getLabel(path);
   if (!Number.isFinite(value)) {
-    return `Invalid numeric value for ${path}.`;
+    return state.locale === "zh" ? `${label} 需要是合法数字。` : `Invalid numeric value for ${label}.`;
   }
   if (kind === "int" && !Number.isInteger(value)) {
-    return `Expected an integer for ${path}.`;
+    return state.locale === "zh" ? `${label} 需要填写整数。` : `Expected an integer for ${label}.`;
   }
 
   const numericMeta = state.ui.numericBounds[path];
   if (numericMeta && (value < numericMeta.min || value > numericMeta.max)) {
-    return `${path} must be between ${numericMeta.min} and ${numericMeta.max}.`;
+    return state.locale === "zh"
+      ? `${label} 必须位于 ${numericMeta.min} 到 ${numericMeta.max} 之间。`
+      : `${label} must be between ${numericMeta.min} and ${numericMeta.max}.`;
   }
 
   if (path.endsWith(".min")) {
     const basePath = path.slice(0, -4);
+    const baseLabel = getLabel(basePath);
     if (value > getAtPath(state.config, `${basePath}.max`)) {
-      return `Min cannot exceed max for ${basePath}.`;
+      return state.locale === "zh" ? `${baseLabel} 的最小值不能大于最大值。` : `Min cannot exceed max for ${baseLabel}.`;
     }
   }
 
   if (path.endsWith(".max")) {
     const basePath = path.slice(0, -4);
+    const baseLabel = getLabel(basePath);
     if (value < getAtPath(state.config, `${basePath}.min`)) {
-      return `Max cannot be smaller than min for ${basePath}.`;
+      return state.locale === "zh"
+        ? `${baseLabel} 的最大值不能小于最小值。`
+        : `Max cannot be smaller than min for ${baseLabel}.`;
     }
   }
-
   return null;
 }
 
@@ -718,14 +1491,32 @@ function flushActiveNumericInput() {
   }
   const path = activeElement.dataset.path;
   const kind = activeElement.dataset.kind ?? "float";
-  if (!path) {
-    return true;
-  }
-  return commitNumericInput(activeElement, path, kind);
+  return path ? commitNumericInput(activeElement, path, kind) : true;
 }
 
 function formatNumericValue(value) {
   return String(value);
+}
+
+function formatMetric(value) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "-";
+  }
+  return value.toFixed(4);
+}
+
+function countMaskWindows(maskAny) {
+  let windows = 0;
+  let inWindow = false;
+  maskAny.forEach((value) => {
+    if (value && !inWindow) {
+      windows += 1;
+      inWindow = true;
+    } else if (!value) {
+      inWindow = false;
+    }
+  });
+  return windows;
 }
 
 function setPending(action, value) {
@@ -734,10 +1525,22 @@ function setPending(action, value) {
 }
 
 function updateToolbarState() {
-  const busy = state.pending.randomize || state.pending.preview;
+  const busy = isBusy();
   dom.restore.disabled = busy;
   dom.randomize.disabled = busy;
   dom.preview.disabled = busy;
+  dom.openImportModal.disabled = busy;
+  dom.applyImportConfig.disabled = state.pending.importConfig;
+  if (dom.resetNodeSelection) {
+    dom.resetNodeSelection.disabled = busy || !state.preview;
+  }
+  if (dom.selectAllNodes) {
+    dom.selectAllNodes.disabled = busy || !state.preview;
+  }
+}
+
+function isBusy() {
+  return state.pending.randomize || state.pending.preview || state.pending.importConfig;
 }
 
 function setStatus(message, kind) {
@@ -759,10 +1562,103 @@ function clearErrorStatus() {
 }
 
 function getLabel(path) {
+  const localeUi = getLocaleUi();
   if (!path) {
-    return state.ui.pathLabels.root ?? "Root";
+    return localeUi.pathLabels.root ?? "Root";
   }
-  return state.ui.pathLabels[path] ?? path.split(".").slice(-1)[0];
+  return localeUi.pathLabels[path] ?? path.split(".").slice(-1)[0];
+}
+
+function getDescription(path) {
+  const localeUi = getLocaleUi();
+  return localeUi.pathDescriptions[path] ?? t("validation.configure");
+}
+
+function getLocaleUi() {
+  if (!state.ui) {
+    return { pathLabels: {}, pathDescriptions: {} };
+  }
+  return state.ui.locales?.[state.locale] ?? { pathLabels: state.ui.pathLabels ?? {}, pathDescriptions: state.ui.pathDescriptions ?? {} };
+}
+
+function getDatasetLabel(entry) {
+  return DATASET_LABELS[state.locale]?.[entry.id] ?? entry.label;
+}
+
+function getDatasetDescription(datasetId) {
+  return LOCALE_TEXT[state.locale][`dataset.${datasetId}.description`] ?? t("dataset.defaultDescription");
+}
+
+function getDatasetGroupLabel(group) {
+  return DATASET_GROUP_LABELS[state.locale]?.[group] ?? group;
+}
+
+function getDatasetKindLabel(kind) {
+  return DATASET_KIND_LABELS[state.locale]?.[kind] ?? kind;
+}
+
+function getDatasetStage(datasetName) {
+  const entry = (state.preview?.series_catalog ?? []).find((item) => item.id === datasetName);
+  return entry?.group ?? "Final";
+}
+
+function formatOptionLabel(path, option) {
+  if (path === "stage1.seasonality.wavelet.contrastive.params") {
+    return getLabel(`stage1.seasonality.${option}`);
+  }
+  return formatTokenLabel(option);
+}
+
+function formatTokenLabel(value) {
+  if (value == null || value === "") {
+    return "-";
+  }
+  return TOKEN_LABELS[state.locale]?.[value] ?? formatCodeLabel(value);
+}
+
+function formatCodeLabel(value) {
+  if (value == null || value === "") {
+    return "-";
+  }
+  const direct = TOKEN_LABELS[state.locale]?.[value];
+  if (direct) {
+    return direct;
+  }
+  return value
+    .split("_")
+    .map((part) => (part.length > 0 ? part[0].toUpperCase() + part.slice(1) : part))
+    .join(" ");
+}
+
+function buildValueRequiredMessage(label) {
+  return state.locale === "zh" ? `${label} 不能为空。` : `Value required for ${label}.`;
+}
+
+function t(key) {
+  return LOCALE_TEXT[state.locale]?.[key] ?? LOCALE_TEXT.en[key] ?? key;
+}
+
+function openImportModal() {
+  dom.importModal.classList.remove("hidden");
+  dom.importModal.setAttribute("aria-hidden", "false");
+  window.setTimeout(() => dom.importTextarea.focus(), 0);
+}
+
+function closeImportModal() {
+  if (state.pending.importConfig) {
+    return;
+  }
+  dom.importModal.classList.add("hidden");
+  dom.importModal.setAttribute("aria-hidden", "true");
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function isLeaf(value) {
@@ -792,5 +1688,5 @@ function deepClone(value) {
 
 init().catch((error) => {
   console.error(error);
-  setStatus(error.message ?? "Failed to load studio.", "error");
+  setStatus(error.message ?? t("status.loadFailed"), "error");
 });
