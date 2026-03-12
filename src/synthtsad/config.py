@@ -3,7 +3,9 @@
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
+
+from .interfaces import LocalTypeSpec, SeasonalTypeSpec
 
 from .utils import (
     IntRange,
@@ -72,7 +74,7 @@ class LocalAnomalyFamilyConfig:
     target_component: str
     node_policy: NodePolicyConfig
     type_weights: dict[str, float]
-    per_type: dict[str, dict[str, Any]]
+    per_type: dict[str, LocalTypeSpec]
 
 
 @dataclass(frozen=True)
@@ -84,7 +86,7 @@ class SeasonalAnomalyFamilyConfig:
     target_component: str
     node_policy: NodePolicyConfig
     type_weights: dict[str, float]
-    per_type: dict[str, dict[str, Any]]
+    per_type: dict[str, SeasonalTypeSpec]
 
 
 @dataclass(frozen=True)
@@ -217,18 +219,6 @@ LOCAL_TARGET_COMPONENTS: tuple[str, ...] = ("observed",)
 SEASONAL_TARGET_COMPONENTS: tuple[str, ...] = ("seasonality",)
 LOCAL_NODE_POLICY_MODES: tuple[str, ...] = ("uniform",)
 SEASONAL_NODE_POLICY_MODES: tuple[str, ...] = ("seasonal_eligible", "uniform")
-LEGACY_ANOMALY_KEYS: set[str] = {
-    "events_per_sample",
-    "seasonal_events_per_sample",
-    "window_length",
-    "local_types",
-    "seasonal_types",
-    "p_endogenous",
-    "p_endogenous_seasonal",
-    "p_use_seasonal_injector",
-}
-
-
 def _default_local_type_weights() -> dict[str, float]:
     return {
         "upward_spike": 1.0,
@@ -821,61 +811,22 @@ def _normalize_type_specs(
     return specs
 
 
-def _legacy_type_weights(selected: Any, allowed_types: list[str]) -> dict[str, float]:
-    selected_set = {str(value) for value in selected} if isinstance(selected, list) else set()
-    return {kind: 1.0 if kind in selected_set else 0.0 for kind in allowed_types}
+def _normalize_local_type_specs(raw: Any) -> dict[str, LocalTypeSpec]:
+    specs = _normalize_type_specs(
+        raw,
+        "anomaly.local.per_type",
+        LOCAL_ANOMALY_TYPES,
+    )
+    return {kind: cast(LocalTypeSpec, spec) for kind, spec in specs.items()}
 
 
-def _copy_legacy_window_length(target: dict[str, Any], window_length: Any) -> None:
-    target.setdefault("defaults", {})["window_length"] = window_length
-    target.setdefault("per_type", {})
-    for spec in target["per_type"].values():
-        if "window_length" in spec:
-            spec["window_length"] = window_length
-
-
-def _migrate_legacy_anomaly_schema(raw: Any) -> dict[str, Any]:
-    if not isinstance(raw, dict):
-        raise ValueError("anomaly must be a mapping")
-
-    normalized = json.loads(json.dumps(_default_anomaly_config()))
-    for key in ["defaults", "local", "seasonal"]:
-        if key in raw and isinstance(raw[key], dict):
-            normalized[key] = _deep_merge(normalized[key], raw[key])
-    if "events_per_sample" in raw:
-        normalized["local"]["budget"]["events_per_sample"] = raw["events_per_sample"]
-    if "seasonal_events_per_sample" in raw:
-        normalized["seasonal"]["budget"]["events_per_sample"] = raw["seasonal_events_per_sample"]
-    if "window_length" in raw:
-        _copy_legacy_window_length(normalized["local"], raw["window_length"])
-        _copy_legacy_window_length(normalized["seasonal"], raw["window_length"])
-    if "local_types" in raw:
-        normalized["local"]["type_weights"] = _legacy_type_weights(raw["local_types"], LOCAL_ANOMALY_TYPES)
-    if "seasonal_types" in raw:
-        normalized["seasonal"]["type_weights"] = _legacy_type_weights(raw["seasonal_types"], SEASONAL_ANOMALY_TYPES)
-    if "p_endogenous" in raw:
-        normalized["local"]["defaults"]["endogenous_p"] = raw["p_endogenous"]
-    if "p_endogenous_seasonal" in raw:
-        normalized["seasonal"]["defaults"]["endogenous_p"] = raw["p_endogenous_seasonal"]
-    if "p_use_seasonal_injector" in raw:
-        normalized["seasonal"]["activation_p"] = raw["p_use_seasonal_injector"]
-    return normalized
-
-
-def migrate_legacy_config(raw: dict[str, Any]) -> dict[str, Any]:
-    migrated = json.loads(json.dumps(raw))
-    if "num_features" in migrated and "num_series" not in migrated:
-        multivariate = bool(migrated.get("multivariate_flag", True))
-        migrated["num_series"] = migrated["num_features"] if multivariate else {"min": 1, "max": 1}
-    if "num_features" in migrated:
-        migrated.pop("num_features", None)
-    if "multivariate_flag" in migrated:
-        migrated.pop("multivariate_flag", None)
-    if "anomaly" in migrated and isinstance(migrated["anomaly"], dict):
-        anomaly_raw = migrated["anomaly"]
-        if LEGACY_ANOMALY_KEYS & set(anomaly_raw.keys()):
-            migrated["anomaly"] = _migrate_legacy_anomaly_schema(anomaly_raw)
-    return migrated
+def _normalize_seasonal_type_specs(raw: Any) -> dict[str, SeasonalTypeSpec]:
+    specs = _normalize_type_specs(
+        raw,
+        "anomaly.seasonal.per_type",
+        SEASONAL_ANOMALY_TYPES,
+    )
+    return {kind: cast(SeasonalTypeSpec, spec) for kind, spec in specs.items()}
 
 
 def _normalize_anomaly_schema(raw: Any) -> dict[str, Any]:
@@ -1091,11 +1042,7 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
             "anomaly.local.type_weights",
             set(LOCAL_ANOMALY_TYPES),
         ),
-        per_type=_normalize_type_specs(
-            local_raw["per_type"],
-            "anomaly.local.per_type",
-            LOCAL_ANOMALY_TYPES,
-        ),
+        per_type=_normalize_local_type_specs(local_raw["per_type"]),
     )
 
     seasonal_target_component = str(seasonal_raw["defaults"]["target_component"])
@@ -1137,11 +1084,7 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
             "anomaly.seasonal.type_weights",
             set(SEASONAL_ANOMALY_TYPES),
         ),
-        per_type=_normalize_type_specs(
-            seasonal_raw["per_type"],
-            "anomaly.seasonal.per_type",
-            SEASONAL_ANOMALY_TYPES,
-        ),
+        per_type=_normalize_seasonal_type_specs(seasonal_raw["per_type"]),
     )
 
     anomaly = AnomalyConfig(

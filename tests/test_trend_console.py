@@ -4,7 +4,6 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 
@@ -15,6 +14,7 @@ if str(SRC) not in sys.path:
 
 from synthtsad.components.trend import render_trend, sample_trend_params
 from synthtsad.config import load_config
+from synthtsad.interfaces import ArimaTrendParams, MultipleTrendParams, TrendParams
 
 
 def _parse_float_list(raw: str) -> list[float]:
@@ -31,7 +31,7 @@ def _parse_int_list(raw: str) -> list[int]:
     return [int(v.strip()) for v in s.split(",") if v.strip()]
 
 
-def _build_params_from_args(args: argparse.Namespace) -> dict[str, Any]:
+def _build_params_from_args(args: argparse.Namespace) -> TrendParams:
     trend_type = args.trend_type
     if trend_type in {"increase", "decrease", "keep_steady"}:
         if args.k0 is None or args.k1 is None:
@@ -45,13 +45,14 @@ def _build_params_from_args(args: argparse.Namespace) -> dict[str, Any]:
         deltas = _parse_float_list(args.slope_deltas)
         if len(cps) != len(deltas):
             raise ValueError("--change-points and --slope-deltas must have the same length")
-        return {
+        params: MultipleTrendParams = {
             "trend_type": "multiple",
             "k0": float(args.k0),
             "k1": float(args.k1),
             "change_points": cps,
             "slope_deltas": deltas,
         }
+        return params
 
     if trend_type == "arima":
         p = int(args.p)
@@ -65,7 +66,7 @@ def _build_params_from_args(args: argparse.Namespace) -> dict[str, Any]:
             raise ValueError(f"--theta expects {q} values for q={q}")
         seed = int(args.stochastic_seed if args.stochastic_seed is not None else args.seed)
         sigma = float(args.sigma)
-        return {
+        params: ArimaTrendParams = {
             "trend_type": "arima",
             "p": p,
             "d": d_order,
@@ -73,15 +74,15 @@ def _build_params_from_args(args: argparse.Namespace) -> dict[str, Any]:
             "phi": phi,
             "theta": theta,
             "sigma": sigma,
-            "noise_scale": sigma,
             "base_level": float(args.base_level),
             "stochastic_seed": seed,
         }
+        return params
 
     raise ValueError(f"Unsupported trend type: {trend_type}")
 
 
-def _load_params(args: argparse.Namespace) -> dict[str, Any]:
+def _load_params(args: argparse.Namespace) -> TrendParams:
     if args.params_json:
         return json.loads(args.params_json)
 

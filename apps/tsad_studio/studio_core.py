@@ -12,7 +12,7 @@ SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from synthtsad.anomaly.local import LocalAnomalyInjector
+from synthtsad.anomaly.local import AnomalyEvent, LocalAnomalyInjector
 from synthtsad.anomaly.seasonal import SeasonalAnomalyInjector
 from synthtsad.causal.arx import ARXSystem
 from synthtsad.causal.dag import CausalGraphSampler
@@ -21,14 +21,13 @@ from synthtsad.components.seasonality import render_seasonality
 from synthtsad.components.trend import render_trend
 from synthtsad.config import (
     DEFAULT_CONFIG,
-    LEGACY_ANOMALY_KEYS,
     LOCAL_NODE_POLICY_MODES,
     LOCAL_TARGET_COMPONENTS,
     SEASONAL_NODE_POLICY_MODES,
     SEASONAL_TARGET_COMPONENTS,
     load_config_from_raw,
-    migrate_legacy_config,
 )
+from synthtsad.interfaces import GenerationMetadata, LabelPayload, Stage1NodeParams
 from synthtsad.labeling.labeler import LabelBuilder
 from synthtsad.pipeline import SyntheticGeneratorPipeline
 
@@ -620,16 +619,6 @@ def _merge_import_payload(default_node: Any, imported_node: Any) -> Any:
     return _to_jsonable(imported_node)
 
 
-def _collect_legacy_migration_notes(raw: dict[str, Any]) -> list[str]:
-    notes: list[str] = []
-    if "num_series" not in raw and "num_features" in raw:
-        notes.append("Upgraded legacy root fields num_features/multivariate_flag to num_series.")
-    anomaly = raw.get("anomaly")
-    if isinstance(anomaly, dict) and LEGACY_ANOMALY_KEYS & set(anomaly.keys()):
-        notes.append("Upgraded legacy anomaly fields to the formal nested Stage 3 schema.")
-    return notes
-
-
 def _pretty_label(path: str, locale: str = "en") -> str:
     path_overrides = PATH_LABEL_OVERRIDES_ZH if locale == "zh" else PATH_LABEL_OVERRIDES
     section_labels = SECTION_LABELS_ZH if locale == "zh" else SECTION_LABELS
@@ -735,15 +724,10 @@ def import_config_text(text: str) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError("Imported config must be a JSON/YAML object.")
 
-    migration_notes = _collect_legacy_migration_notes(parsed)
-    parsed = migrate_legacy_config(parsed)
     defaults = load_default_config_raw()
     merged = _merge_import_payload(defaults, parsed)
     cfg = load_config_from_raw(merged)
-    return {
-        "config": _to_jsonable(cfg.raw),
-        "migrationNotes": migration_notes,
-    }
+    return {"config": _to_jsonable(cfg.raw)}
 
 
 def randomize_config(seed: int | None = None) -> dict[str, Any]:
@@ -939,8 +923,8 @@ def preview_sample(raw_config: dict[str, Any]) -> dict[str, Any]:
 
     local_injector = LocalAnomalyInjector(cfg)
     seasonal_injector = SeasonalAnomalyInjector(cfg)
-    sampled_local_events = []
-    sampled_seasonal_events = []
+    sampled_local_events: list[AnomalyEvent] = []
+    sampled_seasonal_events: list[AnomalyEvent] = []
 
     if rng.random() < cfg.anomaly_sample_ratio:
         if cfg.debug.enable_local_anomaly:
@@ -965,7 +949,7 @@ def preview_sample(raw_config: dict[str, Any]) -> dict[str, Any]:
     post_causal_local_events = [event for event in sampled_local_events if not bool(event.is_endogenous)]
 
     x_stage1_anom = x_stage1.copy()
-    realized_events = []
+    realized_events: list[AnomalyEvent] = []
     if pre_causal_local_events:
         x_stage1_anom, local_events = local_injector.apply_events(x_normal=x_stage1_anom, events=pre_causal_local_events)
         realized_events.extend(local_events)
@@ -1002,7 +986,7 @@ def preview_sample(raw_config: dict[str, Any]) -> dict[str, Any]:
     causal_effect = x_stage2_normal - x_stage1
     final_anomaly_delta = x_observed - x_stage2_normal
 
-    labels = LabelBuilder(cfg).build(
+    labels: LabelPayload = LabelBuilder(cfg).build(
         x_normal=x_stage2_normal,
         x_anom=x_observed,
         events=realized_events,
@@ -1010,13 +994,15 @@ def preview_sample(raw_config: dict[str, Any]) -> dict[str, Any]:
         causal_state=causal_state,
     )
 
-    metadata = {
-        "sample_seed_state": str(rng.bit_generator.state["state"]["state"]),
-        "stage1_params": stage1_params,
-        "stage2_params": arx_params,
-        "stage3_sampled_events": {
-            "local": [event.to_dict() for event in sampled_local_events],
-            "seasonal": [event.to_dict() for event in sampled_seasonal_events],
+    metadata: GenerationMetadata = {
+        "sample": {"seed_state": str(rng.bit_generator.state["state"]["state"])},
+        "stage1": {"params": stage1_params},
+        "stage2": {"params": arx_params},
+        "stage3": {
+            "sampled_events": {
+                "local": [event.to_record() for event in sampled_local_events],
+                "seasonal": [event.to_record() for event in sampled_seasonal_events],
+            }
         },
     }
     series_catalog = [
@@ -1042,23 +1028,16 @@ def preview_sample(raw_config: dict[str, Any]) -> dict[str, Any]:
         "final_anomaly_delta": final_anomaly_delta,
         "observed": x_observed,
     }
-    events = labels["events"]
-    event_summary = {
-        "total": int(len(events)),
-        "local": int(sum(1 for event in events if str(event.get("family", "")) == "local")),
-        "seasonal": int(sum(1 for event in events if str(event.get("family", "")) == "seasonal")),
-        "endogenous": int(sum(1 for event in events if bool(event.get("is_endogenous")))),
-        "target_components": _summarize_counter([str(event.get("target_component", "unknown")) for event in events]),
-    }
+    label_summary = labels["summary"]
     payload = {
         "summary": {
             "length": int(n),
-            "num_features": int(d),
+            "num_series": int(d),
             "is_anomalous_sample": int(labels["is_anomalous_sample"]),
-            "num_events": int(len(realized_events)),
-            "num_local_events": event_summary["local"],
-            "num_seasonal_events": event_summary["seasonal"],
-            "num_endogenous_events": event_summary["endogenous"],
+            "num_events": int(label_summary["total"]),
+            "num_local_events": int(label_summary["local"]),
+            "num_seasonal_events": int(label_summary["seasonal"]),
+            "num_endogenous_events": int(label_summary["endogenous"]),
         },
         "series": series_payload,
         "series_catalog": series_catalog,
@@ -1068,9 +1047,9 @@ def preview_sample(raw_config: dict[str, Any]) -> dict[str, Any]:
             "root_cause": labels["root_cause"],
             "affected_nodes": labels["affected_nodes"],
             "events": labels["events"],
+            "summary": label_summary,
         },
         "debug": {
-            "event_summary": event_summary,
             "series_stats": {key: _series_stats(value) for key, value in series_payload.items()},
             "stage_windows": {
                 "pre_causal_local_nonzero": int(np.count_nonzero(np.abs(pre_causal_local_delta) > 1e-8)),
@@ -1100,14 +1079,7 @@ def _series_stats(values: np.ndarray) -> dict[str, float]:
     }
 
 
-def _summarize_counter(values: list[str]) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for value in values:
-        counts[value] = counts.get(value, 0) + 1
-    return counts
-
-
-def _realize_stage1_preview(cfg, t: np.ndarray, stage1_params: list[dict[str, Any]]) -> dict[str, np.ndarray]:
+def _realize_stage1_preview(cfg, t: np.ndarray, stage1_params: list[Stage1NodeParams]) -> dict[str, np.ndarray]:
     n = t.size
     d = len(stage1_params)
     trend_all = np.zeros((n, d), dtype=float)

@@ -3,10 +3,8 @@
 import numpy as np
 
 from ..config import GeneratorConfig
+from ..interfaces import NoiseParams
 from ..utils import weighted_choice
-
-
-NoiseParams = dict[str, str | float | int | list[dict[str, int | float]]]
 
 
 def sample_noise_params(n: int, config: GeneratorConfig, rng: np.random.Generator) -> NoiseParams:
@@ -35,7 +33,7 @@ def sample_noise_params(n: int, config: GeneratorConfig, rng: np.random.Generato
 
 def render_noise(n: int, params: NoiseParams) -> np.ndarray:
     sigma_t = np.full(n, float(params["sigma0"]), dtype=float)
-    for win in params["volatility_windows"]:  # type: ignore[index]
+    for win in params["volatility_windows"]:
         start = int(win["start"])
         end = int(win["end"])
         v = float(win["v"])

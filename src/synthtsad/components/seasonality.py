@@ -3,11 +3,8 @@ from __future__ import annotations
 import numpy as np
 
 from ..config import GeneratorConfig
+from ..interfaces import SeasonalParams, SeasonalityAtom, WaveletAtom
 from ..utils import weighted_choice
-
-
-SeasonalParams = dict[str, object]
-WaveletAtom = dict[str, object]
 
 
 def _triangle_wave(phase: np.ndarray) -> np.ndarray:
@@ -118,8 +115,8 @@ def _base_atom(
     amplitude: float,
     period: float,
     phase: float,
-) -> dict[str, object]:
-    atom: dict[str, object] = {
+) -> SeasonalityAtom:
+    atom: SeasonalityAtom = {
         "type": atom_type,
         "period": period,
         "frequency": 1.0 / period,
@@ -210,7 +207,7 @@ def sample_seasonality_params(n: int, config: GeneratorConfig, rng: np.random.Ge
 
     k_atoms = config.stage1.seasonal_atoms.sample(rng)
     amp_min, amp_max = config.stage1.seasonal_amplitude
-    atoms: list[dict[str, object]] = []
+    atoms: list[SeasonalityAtom] = []
 
     if season_type != "wavelet":
         for _ in range(k_atoms):
@@ -255,7 +252,7 @@ def render_seasonality(t: np.ndarray, params: SeasonalParams) -> np.ndarray:
         return np.zeros(n, dtype=float)
 
     signal = np.zeros(n, dtype=float)
-    atoms = list(params["atoms"])  # type: ignore[index]
+    atoms = list(params["atoms"])
 
     for atom in atoms:
         atom_type = str(atom.get("type", season_type))

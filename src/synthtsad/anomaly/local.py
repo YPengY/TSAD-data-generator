@@ -1,11 +1,38 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
-from typing import Any
+from copy import deepcopy
+from dataclasses import dataclass
+from typing import Any, cast
 
 import numpy as np
 
 from ..config import GeneratorConfig
+from ..interfaces import (
+    AsymmetricEventParams,
+    BurstSpikeEventParams,
+    EventFamily,
+    EventParams,
+    LocalTypeSpec,
+    LocalEventParams,
+    OutlierLocalSpec,
+    OutlierEventParams,
+    PlateauLocalSpec,
+    PlateauEventParams,
+    RangeConfig,
+    ShakeEventParams,
+    ShakeLocalSpec,
+    SpikeLevelLocalSpec,
+    SpikeEventParams,
+    SpikeLocalSpec,
+    SpikeLevelEventParams,
+    Stage3EventRecord,
+    SuddenShiftLocalSpec,
+    SuddenShiftEventParams,
+    WideSpikeLocalSpec,
+    WideSpikeEventParams,
+    BurstSpikeLocalSpec,
+    AsymmetricLocalSpec,
+)
 from ..utils import IntRange, weighted_choice
 
 
@@ -15,15 +42,26 @@ class AnomalyEvent:
     node: int
     t_start: int
     t_end: int
-    params: dict[str, Any]
+    params: EventParams
     is_endogenous: bool
     root_cause_node: int | None
     affected_nodes: list[int]
-    family: str = "local"
+    family: EventFamily = "local"
     target_component: str = "observed"
 
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+    def to_record(self) -> Stage3EventRecord:
+        return {
+            "anomaly_type": self.anomaly_type,
+            "node": int(self.node),
+            "t_start": int(self.t_start),
+            "t_end": int(self.t_end),
+            "params": cast(EventParams, deepcopy(self.params)),
+            "is_endogenous": bool(self.is_endogenous),
+            "root_cause_node": None if self.root_cause_node is None else int(self.root_cause_node),
+            "affected_nodes": [int(node) for node in self.affected_nodes],
+            "family": self.family,
+            "target_component": str(self.target_component),
+        }
 
 
 class LocalAnomalyInjector:
@@ -57,7 +95,7 @@ class LocalAnomalyInjector:
 
     def _range_bounds(
         self,
-        value: IntRange | dict[str, Any] | int | float,
+        value: IntRange | RangeConfig | int | float,
         *,
         integer: bool,
     ) -> tuple[int | float, int | float]:
@@ -75,7 +113,7 @@ class LocalAnomalyInjector:
 
     def _sample_int(
         self,
-        value: IntRange | dict[str, Any] | int,
+        value: IntRange | RangeConfig | int,
         rng: np.random.Generator,
         *,
         low_clip: int | None = None,
@@ -92,7 +130,7 @@ class LocalAnomalyInjector:
 
     def _sample_float(
         self,
-        value: dict[str, Any] | float | int,
+        value: RangeConfig | float | int,
         rng: np.random.Generator,
         *,
         low_clip: float | None = None,
@@ -113,7 +151,7 @@ class LocalAnomalyInjector:
         self,
         n: int,
         rng: np.random.Generator,
-        spec: dict[str, Any],
+        spec: LocalTypeSpec,
         min_len: int | None = None,
         max_len: int | None = None,
     ) -> tuple[int, int]:
@@ -131,122 +169,145 @@ class LocalAnomalyInjector:
 
     def _sample_spike_params(
         self,
-        spec: dict[str, Any],
+        spec: SpikeLocalSpec | SpikeLevelLocalSpec,
         t_start: int,
         t_end: int,
         rng: np.random.Generator,
-    ) -> dict[str, Any]:
+    ) -> SpikeEventParams:
         width_cap = max(2, (t_end - t_start) // 3 + 1)
-        return {
+        params: SpikeEventParams = {
             "amplitude": self._sample_float(spec["amplitude"], rng),
             "center": int(rng.integers(t_start, t_end)),
             "half_width": self._sample_int(spec["half_width"], rng, low_clip=1, high_clip=width_cap),
         }
+        return params
 
     def _sample_template_spec(
         self,
         kind: str,
         n: int,
         rng: np.random.Generator,
-        spec: dict[str, Any],
-    ) -> tuple[int, int, dict[str, Any]]:
+        spec: LocalTypeSpec,
+    ) -> tuple[int, int, LocalEventParams]:
         if kind == "outlier":
+            outlier_spec = cast(OutlierLocalSpec, spec)
             t0 = int(rng.integers(0, n))
-            amplitude = self._sample_float(spec["amplitude"], rng)
-            min_abs = float(spec.get("min_abs_amplitude", 0.0))
+            amplitude = self._sample_float(outlier_spec["amplitude"], rng)
+            min_abs = float(outlier_spec["min_abs_amplitude"])
             if abs(amplitude) < min_abs:
                 amplitude = min_abs if amplitude >= 0.0 else -min_abs
-            return t0, t0 + 1, {"amplitude": amplitude, "t0": t0}
+            params: OutlierEventParams = {"amplitude": amplitude, "t0": t0}
+            return t0, t0 + 1, params
 
         if kind in self._SPIKE_LEVEL_TYPES:
+            spike_level_spec = cast(SpikeLevelLocalSpec, spec)
             t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=8)
-            spike = self._sample_spike_params(spec=spec, t_start=t_start, t_end=t_end, rng=rng)
+            spike = self._sample_spike_params(spec=spike_level_spec, t_start=t_start, t_end=t_end, rng=rng)
             shift_start = int(min(n - 1, max(spike["center"], t_end - 1)))
-            shift_magnitude = self._sample_float(spec["shift_magnitude"], rng)
-            spike["shift_start"] = shift_start
-            spike["shift_magnitude"] = shift_magnitude
-            return t_start, n, spike
+            shift_magnitude = self._sample_float(spike_level_spec["shift_magnitude"], rng)
+            params: SpikeLevelEventParams = {
+                "amplitude": float(spike["amplitude"]),
+                "center": int(spike["center"]),
+                "half_width": int(spike["half_width"]),
+                "shift_start": shift_start,
+                "shift_magnitude": shift_magnitude,
+            }
+            return t_start, n, params
 
         if kind in self._SINGLE_SPIKE_TYPES:
+            spike_spec = cast(SpikeLocalSpec, spec)
             t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=5)
-            return t_start, t_end, self._sample_spike_params(spec=spec, t_start=t_start, t_end=t_end, rng=rng)
+            return t_start, t_end, self._sample_spike_params(spec=spike_spec, t_start=t_start, t_end=t_end, rng=rng)
 
         if kind in self._BURST_SPIKE_TYPES:
+            burst_spec = cast(BurstSpikeLocalSpec, spec)
             t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=10)
             window = max(2, t_end - t_start)
-            _, configured_max = self._range_bounds(spec["spike_count"], integer=True)
+            _, configured_max = self._range_bounds(burst_spec["spike_count"], integer=True)
             spike_cap = max(2, min(int(configured_max), max(2, window // 2)))
-            sampled_count = self._sample_int(spec["spike_count"], rng, low_clip=2, high_clip=spike_cap)
-            stride_cap = max(1, min(self._range_bounds(spec["stride"], integer=True)[1], window // max(2, sampled_count)))
-            stride = self._sample_int(spec["stride"], rng, low_clip=1, high_clip=int(stride_cap))
-            amplitudes = [self._sample_float(spec["amplitude"], rng) for _ in range(sampled_count)]
-            width_cap = max(1, min(int(self._range_bounds(spec["half_width"], integer=True)[1]), window // 2 + 1))
+            sampled_count = self._sample_int(burst_spec["spike_count"], rng, low_clip=2, high_clip=spike_cap)
+            stride_cap = max(1, min(self._range_bounds(burst_spec["stride"], integer=True)[1], window // max(2, sampled_count)))
+            stride = self._sample_int(burst_spec["stride"], rng, low_clip=1, high_clip=int(stride_cap))
+            amplitudes = [self._sample_float(burst_spec["amplitude"], rng) for _ in range(sampled_count)]
+            width_cap = max(1, min(int(self._range_bounds(burst_spec["half_width"], integer=True)[1]), window // 2 + 1))
             widths = [
-                self._sample_int(spec["half_width"], rng, low_clip=1, high_clip=width_cap)
+                self._sample_int(burst_spec["half_width"], rng, low_clip=1, high_clip=width_cap)
                 for _ in range(sampled_count)
             ]
-            return t_start, t_end, {
+            params: BurstSpikeEventParams = {
                 "spike_count": sampled_count,
                 "stride": stride,
                 "amplitudes": amplitudes,
                 "widths": widths,
                 "t0": t_start,
             }
+            return t_start, t_end, params
 
         if kind in self._WIDE_SPIKE_TYPES:
+            wide_spec = cast(WideSpikeLocalSpec, spec)
             t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=8)
             window = max(3, t_end - t_start)
-            rise_length = self._sample_int(spec["rise_length"], rng, low_clip=1, high_clip=window - 1)
-            fall_length = self._sample_int(spec["fall_length"], rng, low_clip=1, high_clip=window - 1)
-            return t_start, t_end, {
-                "amplitude": self._sample_float(spec["amplitude"], rng),
+            rise_length = self._sample_int(wide_spec["rise_length"], rng, low_clip=1, high_clip=window - 1)
+            fall_length = self._sample_int(wide_spec["fall_length"], rng, low_clip=1, high_clip=window - 1)
+            params: WideSpikeEventParams = {
+                "amplitude": self._sample_float(wide_spec["amplitude"], rng),
                 "rise_length": rise_length,
                 "fall_length": fall_length,
             }
+            return t_start, t_end, params
 
         if kind in self._SUDDEN_SHIFT_TYPES:
+            shift_spec = cast(SuddenShiftLocalSpec, spec)
             t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=6)
-            return t_start, t_end, {
-                "amplitude": self._sample_float(spec["amplitude"], rng),
+            params: SuddenShiftEventParams = {
+                "amplitude": self._sample_float(shift_spec["amplitude"], rng),
                 "t0": int(rng.integers(t_start, t_end)),
-                "kappa": self._sample_float(spec["kappa"], rng, low_clip=1e-6),
+                "kappa": self._sample_float(shift_spec["kappa"], rng, low_clip=1e-6),
             }
+            return t_start, t_end, params
 
         if kind in {"plateau", "convex_plateau", "concave_plateau"}:
+            plateau_spec = cast(PlateauLocalSpec, spec)
             t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=6)
-            positive_p = float(spec.get("positive_p", 0.5))
+            positive_p = float(plateau_spec.get("positive_p", 0.5))
             sign = 1.0 if kind == "convex_plateau" else -1.0 if kind == "concave_plateau" else (1.0 if rng.random() < positive_p else -1.0)
-            return t_start, t_end, {
-                "amplitude": self._sample_float(spec["amplitude"], rng),
+            params: PlateauEventParams = {
+                "amplitude": self._sample_float(plateau_spec["amplitude"], rng),
                 "sign": sign,
             }
+            return t_start, t_end, params
 
         if kind in self._ASYMMETRIC_TYPES:
+            asymmetric_spec = cast(AsymmetricLocalSpec, spec)
             t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=8)
             peak = int(rng.integers(t_start + 1, t_end))
-            rapid = self._sample_float(spec["rapid_tau"], rng, low_clip=1e-6)
-            slow = self._sample_float(spec["slow_tau"], rng, low_clip=1e-6)
+            rapid = self._sample_float(asymmetric_spec["rapid_tau"], rng, low_clip=1e-6)
+            slow = self._sample_float(asymmetric_spec["slow_tau"], rng, low_clip=1e-6)
             rise_tau = rapid if "rapid_rise" in kind or "slow_decline_rapid_rise" in kind else slow
             fall_tau = rapid if "rapid_decline" in kind or "slow_rise_rapid_decline" in kind else slow
             sign = -1.0 if kind in {"rapid_decline_slow_rise", "slow_decline_rapid_rise"} else 1.0
-            return t_start, t_end, {
-                "amplitude": self._sample_float(spec["amplitude"], rng),
+            params: AsymmetricEventParams = {
+                "amplitude": self._sample_float(asymmetric_spec["amplitude"], rng),
                 "peak": peak,
                 "rise_tau": rise_tau,
                 "fall_tau": fall_tau,
                 "sign": sign,
             }
+            return t_start, t_end, params
 
         if kind == "shake":
+            shake_spec = cast(ShakeLocalSpec, spec)
             t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=10)
-            return t_start, t_end, {
-                "amplitude": self._sample_float(spec["amplitude"], rng),
-                "freq": self._sample_float(spec["frequency"], rng),
-                "phase": self._sample_float(spec["phase"], rng),
+            params: ShakeEventParams = {
+                "amplitude": self._sample_float(shake_spec["amplitude"], rng),
+                "freq": self._sample_float(shake_spec["frequency"], rng),
+                "phase": self._sample_float(shake_spec["phase"], rng),
             }
+            return t_start, t_end, params
 
+        default_spike_spec = cast(SpikeLocalSpec, spec)
         t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=5)
-        return t_start, t_end, self._sample_spike_params(spec=spec, t_start=t_start, t_end=t_end, rng=rng)
+        return t_start, t_end, self._sample_spike_params(spec=default_spike_spec, t_start=t_start, t_end=t_end, rng=rng)
 
     def _eligible_type_weights(self) -> dict[str, float]:
         local_cfg = self._local_config()
@@ -348,29 +409,31 @@ class LocalAnomalyInjector:
             delta[fall_mask] = amplitude * np.exp(-(idx[fall_mask] - peak) / max(fall_tau, 1e-6))
         return sign * delta
 
-    def _render_template(self, kind: str, n: int, t_start: int, t_end: int, params: dict[str, Any]) -> np.ndarray:
+    def _render_template(self, kind: str, n: int, t_start: int, t_end: int, params: LocalEventParams) -> np.ndarray:
         delta = np.zeros(n, dtype=float)
         idx = np.arange(max(0, t_start), min(n, t_end))
         rel = np.arange(idx.size)
 
         if kind in self._SINGLE_SPIKE_TYPES:
+            spike_params = cast(SpikeEventParams, params)
             sign = 1.0 if kind == "upward_spike" else -1.0
             delta[idx] = self._render_triangular_spike(
                 idx=idx,
-                center=int(params["center"]),
-                half_width=int(params["half_width"]),
-                amplitude=float(params["amplitude"]),
+                center=int(spike_params["center"]),
+                half_width=int(spike_params["half_width"]),
+                amplitude=float(spike_params["amplitude"]),
                 sign=sign,
             )
             return delta
 
         if kind in self._BURST_SPIKE_TYPES:
+            burst_params = cast(BurstSpikeEventParams, params)
             sign = 1.0 if kind == "continuous_upward_spikes" else -1.0
-            spike_count = int(params["spike_count"])
-            stride = int(params["stride"])
-            t0 = int(params["t0"])
-            amplitudes = [float(v) for v in params["amplitudes"]]
-            widths = [int(v) for v in params["widths"]]
+            spike_count = int(burst_params["spike_count"])
+            stride = int(burst_params["stride"])
+            t0 = int(burst_params["t0"])
+            amplitudes = [float(v) for v in burst_params["amplitudes"]]
+            widths = [int(v) for v in burst_params["widths"]]
             for offset in range(spike_count):
                 delta[idx] += self._render_triangular_spike(
                     idx=idx,
@@ -382,69 +445,76 @@ class LocalAnomalyInjector:
             return delta
 
         if kind in self._WIDE_SPIKE_TYPES:
+            wide_params = cast(WideSpikeEventParams, params)
             sign = 1.0 if kind == "wide_upward_spike" else -1.0
             delta[idx] = self._render_wide_spike(
                 idx=idx,
                 t_start=t_start,
                 t_end=t_end,
-                amplitude=float(params["amplitude"]),
-                rise_length=int(params["rise_length"]),
-                fall_length=int(params["fall_length"]),
+                amplitude=float(wide_params["amplitude"]),
+                rise_length=int(wide_params["rise_length"]),
+                fall_length=int(wide_params["fall_length"]),
                 sign=sign,
             )
             return delta
 
         if kind == "outlier":
-            t0 = int(params["t0"])
+            outlier_params = cast(OutlierEventParams, params)
+            t0 = int(outlier_params["t0"])
             if 0 <= t0 < n:
-                delta[t0] = float(params["amplitude"])
+                delta[t0] = float(outlier_params["amplitude"])
             return delta
 
         if kind in self._SUDDEN_SHIFT_TYPES:
+            shift_params = cast(SuddenShiftEventParams, params)
             sign = 1.0 if kind == "sudden_increase" else -1.0
-            t0 = int(params["t0"])
-            kappa = float(params["kappa"])
+            t0 = int(shift_params["t0"])
+            kappa = float(shift_params["kappa"])
             logits = kappa * (idx - t0)
-            delta[idx] = sign * float(params["amplitude"]) * (1.0 / (1.0 + np.exp(-logits)))
+            delta[idx] = sign * float(shift_params["amplitude"]) * (1.0 / (1.0 + np.exp(-logits)))
             return delta
 
         if kind in {"plateau", "convex_plateau", "concave_plateau"}:
+            plateau_params = cast(PlateauEventParams, params)
             phase = np.pi * rel / max(1, idx.size - 1)
-            delta[idx] = float(params["sign"]) * float(params["amplitude"]) * 0.5 * (1.0 - np.cos(phase))
+            delta[idx] = float(plateau_params["sign"]) * float(plateau_params["amplitude"]) * 0.5 * (1.0 - np.cos(phase))
             return delta
 
         if kind in self._ASYMMETRIC_TYPES:
+            asymmetric_params = cast(AsymmetricEventParams, params)
             delta[idx] = self._render_asymmetric_transient(
                 idx=idx,
                 t_start=t_start,
-                peak=int(params["peak"]),
-                amplitude=float(params["amplitude"]),
-                rise_tau=float(params["rise_tau"]),
-                fall_tau=float(params["fall_tau"]),
-                sign=float(params["sign"]),
+                peak=int(asymmetric_params["peak"]),
+                amplitude=float(asymmetric_params["amplitude"]),
+                rise_tau=float(asymmetric_params["rise_tau"]),
+                fall_tau=float(asymmetric_params["fall_tau"]),
+                sign=float(asymmetric_params["sign"]),
             )
             return delta
 
         if kind in self._SPIKE_LEVEL_TYPES:
+            spike_level_params = cast(SpikeLevelEventParams, params)
             spike_sign = 1.0 if "upward" in kind else -1.0
             shift_sign = 1.0 if kind in {"increase_after_downward_spike", "increase_after_upward_spike"} else -1.0
             spike = self._render_triangular_spike(
                 idx=np.arange(n),
-                center=int(params["center"]),
-                half_width=int(params["half_width"]),
-                amplitude=float(params["amplitude"]),
+                center=int(spike_level_params["center"]),
+                half_width=int(spike_level_params["half_width"]),
+                amplitude=float(spike_level_params["amplitude"]),
                 sign=spike_sign,
             )
             shift = np.zeros(n, dtype=float)
-            shift_start = int(params["shift_start"])
+            shift_start = int(spike_level_params["shift_start"])
             if shift_start < n:
-                shift[shift_start:] = shift_sign * float(params["shift_magnitude"])
+                shift[shift_start:] = shift_sign * float(spike_level_params["shift_magnitude"])
             return spike + shift
 
-        freq = float(params.get("freq", 0.2))
-        phase = float(params.get("phase", 0.0))
+        shake_params = cast(ShakeEventParams, params)
+        freq = float(shake_params["freq"])
+        phase = float(shake_params["phase"])
         window = np.sin(np.pi * rel / max(1, idx.size - 1)) ** 2
-        delta[idx] = float(params.get("amplitude", 1.0)) * window * np.sin(2 * np.pi * freq * rel + phase)
+        delta[idx] = float(shake_params["amplitude"]) * window * np.sin(2 * np.pi * freq * rel + phase)
         return delta
 
     def sample_events(

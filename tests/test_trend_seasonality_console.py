@@ -156,12 +156,6 @@ def main() -> None:
         help="Output image path",
     )
     parser.add_argument("--line-width", type=float, default=1.5, help="Line width")
-    parser.add_argument(
-        "--point-size",
-        type=float,
-        default=None,
-        help="Deprecated alias of --line-width (kept for backward compatibility)",
-    )
     parser.add_argument("--show-plot", action="store_true", help="Show interactive window")
 
     args = parser.parse_args()
@@ -212,7 +206,6 @@ def main() -> None:
 
     if args.plot:
         plot_path = Path(args.plot_out)
-        line_width = float(args.point_size) if args.point_size is not None else float(args.line_width)
         _plot_components(
             t=t,
             trend=trend,
@@ -220,7 +213,7 @@ def main() -> None:
             combined=combined,
             out_path=plot_path,
             show_window=bool(args.show_plot),
-            line_width=line_width,
+            line_width=float(args.line_width),
         )
         print(f"=== figure_saved ===\n{plot_path.resolve()}")
 

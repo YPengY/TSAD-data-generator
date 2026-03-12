@@ -1,12 +1,50 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any
+from typing import Any, Literal, cast
 
 import numpy as np
 
 from ..components.seasonality import render_seasonality
 from ..config import GeneratorConfig
+from ..interfaces import (
+    ARXParams,
+    AddHarmonicSeasonalSpec,
+    AddWaveletEventParams,
+    AddWaveletSeasonalSpec,
+    DeltaCycleEventParams,
+    DeltaCycleSeasonalSpec,
+    DeltaPhaseEventParams,
+    DeltaPhaseSeasonalSpec,
+    DeltaShiftSeasonalSpec,
+    EmptyEventParams,
+    FactorEventParams,
+    FactorSeasonalSpec,
+    HarmonicEventParams,
+    IndexedDeltaPhaseEventParams,
+    IndexedDeltaShiftEventParams,
+    IndexedDepthEventParams,
+    IndexedEventParams,
+    IndexedFactorEventParams,
+    IndexedFrequencyEventParams,
+    IndexedPhaseEventParams,
+    IndexedTargetFamilyEventParams,
+    NoiseInjectionEventParams,
+    NoiseInjectionSeasonalSpec,
+    RangeConfig,
+    ScaleEventParams,
+    ScaleSeasonalSpec,
+    SeasonalEventParams,
+    SeasonalParams,
+    SeasonalSpecBase,
+    SeasonalTypeSpec,
+    Stage1NodeParams,
+    TargetTypeEventParams,
+    WaveformChangeSeasonalSpec,
+    WaveletFamilySeasonalSpec,
+    ModulationDepthSeasonalSpec,
+    ModulationPhaseSeasonalSpec,
+)
 from ..utils import IntRange, weighted_choice
 from .local import AnomalyEvent
 
@@ -51,7 +89,7 @@ class SeasonalAnomalyInjector:
 
     def _range_bounds(
         self,
-        value: IntRange | dict[str, Any] | int | float,
+        value: IntRange | RangeConfig | int | float,
         *,
         integer: bool,
     ) -> tuple[int | float, int | float]:
@@ -69,7 +107,7 @@ class SeasonalAnomalyInjector:
 
     def _sample_int(
         self,
-        value: IntRange | dict[str, Any] | int,
+        value: IntRange | RangeConfig | int,
         rng: np.random.Generator,
         *,
         low_clip: int | None = None,
@@ -86,7 +124,7 @@ class SeasonalAnomalyInjector:
 
     def _sample_float(
         self,
-        value: dict[str, Any] | int | float,
+        value: RangeConfig | int | float,
         rng: np.random.Generator,
         *,
         low_clip: float | None = None,
@@ -103,7 +141,7 @@ class SeasonalAnomalyInjector:
             return float(low)
         return float(rng.uniform(float(low), float(high)))
 
-    def _sample_window(self, n: int, rng: np.random.Generator, spec: dict[str, Any]) -> tuple[int, int]:
+    def _sample_window(self, n: int, rng: np.random.Generator, spec: SeasonalTypeSpec) -> tuple[int, int]:
         family_window = self._seasonal_config().window_length
         base_window = spec.get("window_length", family_window)
         min_len, max_len = self._range_bounds(base_window, integer=True)
@@ -121,9 +159,9 @@ class SeasonalAnomalyInjector:
         warped = (src * factor) % max(1, m - 1)
         return np.interp(warped, src, segment)
 
-    def _candidate_kinds(self, season_params: dict[str, Any]) -> list[str]:
-        season_type = str(season_params.get("seasonality_type", "none"))
-        atoms = list(season_params.get("atoms", []))
+    def _candidate_kinds(self, season_params: SeasonalParams) -> list[str]:
+        season_type = str(season_params["seasonality_type"])
+        atoms = list(season_params["atoms"])
         if season_type == "none" or not atoms:
             return []
 
@@ -142,117 +180,154 @@ class SeasonalAnomalyInjector:
     def _sample_event_params(
         self,
         kind: str,
-        season_params: dict[str, Any],
+        season_params: SeasonalParams,
         rng: np.random.Generator,
-        spec: dict[str, Any],
-    ) -> dict[str, Any]:
-        atoms = list(season_params.get("atoms", []))
-        season_type = str(season_params.get("seasonality_type", "none"))
+        spec: SeasonalTypeSpec,
+    ) -> SeasonalEventParams:
+        atoms = list(season_params["atoms"])
+        season_type = str(season_params["seasonality_type"])
 
         if kind == "amplitude_scaling":
-            return {"scale": self._sample_float(spec["scale"], rng)}
+            scale_spec = cast(ScaleSeasonalSpec, spec)
+            params: ScaleEventParams = {"scale": self._sample_float(scale_spec["scale"], rng)}
+            return params
         if kind == "frequency_change":
-            return {"factor": self._sample_float(spec["factor"], rng)}
+            factor_spec = cast(FactorSeasonalSpec, spec)
+            params: FactorEventParams = {"factor": self._sample_float(factor_spec["factor"], rng)}
+            return params
         if kind == "noise_injection":
-            return {"noise_scale": self._sample_float(spec["noise_scale"], rng)}
+            noise_spec = cast(NoiseInjectionSeasonalSpec, spec)
+            params: NoiseInjectionEventParams = {"noise_scale": self._sample_float(noise_spec["noise_scale"], rng)}
+            return params
         if kind == "waveform_change":
+            waveform_spec = cast(WaveformChangeSeasonalSpec, spec)
             choices = [value for value in ["sine", "square", "triangle"] if value != season_type]
             weights = {
-                target: float(spec["target_type_weights"].get(target, 0.0))
+                target: float(waveform_spec["target_type_weights"].get(target, 0.0))
                 for target in choices
-                if float(spec["target_type_weights"].get(target, 0.0)) > 0.0
+                if float(waveform_spec["target_type_weights"].get(target, 0.0)) > 0.0
             }
             target = weighted_choice(rng, weights) if weights else str(rng.choice(choices))
-            return {"target_type": target}
+            params: TargetTypeEventParams = {"target_type": cast(Literal["sine", "square", "triangle"], target)}
+            return params
         if kind == "phase_shift":
-            return {"delta_phase": self._sample_float(spec["delta_phase"], rng)}
+            phase_spec = cast(DeltaPhaseSeasonalSpec, spec)
+            params: DeltaPhaseEventParams = {"delta_phase": self._sample_float(phase_spec["delta_phase"], rng)}
+            return params
         if kind == "add_harmonic":
+            harmonic_spec = cast(AddHarmonicSeasonalSpec, spec)
             base_period = float(np.median([float(atom["period"]) for atom in atoms]))
-            order = self._sample_int(spec["order"], rng, low_clip=2)
+            order = self._sample_int(harmonic_spec["order"], rng, low_clip=2)
             harmonic_period = max(2.0, base_period / order)
             mean_amplitude = float(np.mean([float(atom["amplitude"]) for atom in atoms]))
-            return {
-                "amplitude": self._sample_float(spec["amplitude_scale"], rng) * max(mean_amplitude, 0.2),
+            params: HarmonicEventParams = {
+                "amplitude": self._sample_float(harmonic_spec["amplitude_scale"], rng) * max(mean_amplitude, 0.2),
                 "period": harmonic_period,
-                "phase": self._sample_float(spec["phase"], rng),
+                "phase": self._sample_float(harmonic_spec["phase"], rng),
             }
+            return params
         if kind == "remove_harmonic":
-            return {"index": int(rng.integers(0, len(atoms)))}
+            params: IndexedEventParams = {"index": int(rng.integers(0, len(atoms)))}
+            return params
         if kind == "modify_harmonic_phase":
-            return {
+            phase_spec = cast(DeltaPhaseSeasonalSpec, spec)
+            params: IndexedDeltaPhaseEventParams = {
                 "index": int(rng.integers(0, len(atoms))),
-                "delta_phase": self._sample_float(spec["delta_phase"], rng),
+                "delta_phase": self._sample_float(phase_spec["delta_phase"], rng),
             }
+            return params
         if kind == "modify_modulation_depth":
-            return {
+            depth_spec = cast(ModulationDepthSeasonalSpec, spec)
+            params: IndexedDepthEventParams = {
                 "index": int(rng.integers(0, len(atoms))),
-                "depth": self._sample_float(spec["depth"], rng, low_clip=0.0, high_clip=1.0),
+                "depth": self._sample_float(depth_spec["depth"], rng, low_clip=0.0, high_clip=1.0),
             }
+            return params
         if kind == "modify_modulation_frequency":
+            factor_spec = cast(FactorSeasonalSpec, spec)
             index = int(rng.integers(0, len(atoms)))
             atom_freq = float(atoms[index]["frequency"])
-            return {
+            params: IndexedFrequencyEventParams = {
                 "index": index,
-                "frequency": self._sample_float(spec["factor"], rng, low_clip=0.0) * atom_freq,
+                "frequency": self._sample_float(factor_spec["factor"], rng, low_clip=0.0) * atom_freq,
             }
+            return params
         if kind == "modify_modulation_phase":
-            return {
+            phase_spec = cast(ModulationPhaseSeasonalSpec, spec)
+            params: IndexedPhaseEventParams = {
                 "index": int(rng.integers(0, len(atoms))),
-                "phase": self._sample_float(spec["phase"], rng),
+                "phase": self._sample_float(phase_spec["phase"], rng),
             }
+            return params
         if kind == "pulse_shift":
-            return {"delta_cycle": self._sample_float(spec["delta_cycle"], rng)}
+            cycle_spec = cast(DeltaCycleSeasonalSpec, spec)
+            params: DeltaCycleEventParams = {"delta_cycle": self._sample_float(cycle_spec["delta_cycle"], rng)}
+            return params
         if kind == "pulse_width_modulation":
-            return {"factor": self._sample_float(spec["factor"], rng)}
+            factor_spec = cast(FactorSeasonalSpec, spec)
+            params: FactorEventParams = {"factor": self._sample_float(factor_spec["factor"], rng)}
+            return params
         if kind == "wavelet_family_change":
+            family_spec = cast(WaveletFamilySeasonalSpec, spec)
             index = int(rng.integers(0, len(atoms)))
             source = str(atoms[index].get("family", "morlet"))
             weights = {
-                family: float(spec["target_family_weights"].get(family, 0.0))
+                family: float(family_spec["target_family_weights"].get(family, 0.0))
                 for family in self.config.stage1.wavelet_family_weights
-                if family != source and float(spec["target_family_weights"].get(family, 0.0)) > 0.0
+                if family != source and float(family_spec["target_family_weights"].get(family, 0.0)) > 0.0
             }
             choices = list(weights.keys()) or [family for family in self.config.stage1.wavelet_family_weights if family != source]
             target_family = weighted_choice(rng, weights) if weights else str(rng.choice(choices))
-            return {"index": index, "target_family": target_family}
+            params: IndexedTargetFamilyEventParams = {"index": index, "target_family": target_family}
+            return params
         if kind == "wavelet_scale_change":
-            return {
+            factor_spec = cast(FactorSeasonalSpec, spec)
+            params: IndexedFactorEventParams = {
                 "index": int(rng.integers(0, len(atoms))),
-                "factor": self._sample_float(spec["factor"], rng),
+                "factor": self._sample_float(factor_spec["factor"], rng),
             }
+            return params
         if kind == "wavelet_shift_change":
-            return {
+            shift_spec = cast(DeltaShiftSeasonalSpec, spec)
+            params: IndexedDeltaShiftEventParams = {
                 "index": int(rng.integers(0, len(atoms))),
-                "delta_shift": self._sample_float(spec["delta_shift"], rng),
+                "delta_shift": self._sample_float(shift_spec["delta_shift"], rng),
             }
+            return params
         if kind == "wavelet_amplitude_change":
-            return {
+            factor_spec = cast(FactorSeasonalSpec, spec)
+            params: IndexedFactorEventParams = {
                 "index": int(rng.integers(0, len(atoms))),
-                "factor": self._sample_float(spec["factor"], rng),
+                "factor": self._sample_float(factor_spec["factor"], rng),
             }
+            return params
         if kind == "add_wavelet":
+            wavelet_spec = cast(AddWaveletSeasonalSpec, spec)
             family_weights = {
-                family: float(spec["family_weights"].get(family, 0.0))
+                family: float(wavelet_spec["family_weights"].get(family, 0.0))
                 for family in self.config.stage1.wavelet_family_weights
-                if float(spec["family_weights"].get(family, 0.0)) > 0.0
+                if float(wavelet_spec["family_weights"].get(family, 0.0)) > 0.0
             }
-            return {
+            params: AddWaveletEventParams = {
                 "family": weighted_choice(rng, family_weights) if family_weights else str(rng.choice(list(self.config.stage1.wavelet_family_weights.keys()))),
-                "period": self._sample_float(spec["period"], rng, low_clip=2.0),
-                "amplitude": self._sample_float(spec["amplitude"], rng, low_clip=0.0),
-                "phase": self._sample_float(spec["phase"], rng),
-                "scale": self._sample_float(spec["scale"], rng, low_clip=1e-6),
-                "shift": self._sample_float(spec["shift"], rng),
+                "period": self._sample_float(wavelet_spec["period"], rng, low_clip=2.0),
+                "amplitude": self._sample_float(wavelet_spec["amplitude"], rng, low_clip=0.0),
+                "phase": self._sample_float(wavelet_spec["phase"], rng),
+                "scale": self._sample_float(wavelet_spec["scale"], rng, low_clip=1e-6),
+                "shift": self._sample_float(wavelet_spec["shift"], rng),
             }
+            return params
         if kind == "remove_wavelet":
-            return {"index": int(rng.integers(0, len(atoms)))}
+            params: IndexedEventParams = {"index": int(rng.integers(0, len(atoms)))}
+            return params
 
-        return {}
+        params: EmptyEventParams = {}
+        return params
 
     def _eligible_nodes(
         self,
         d: int,
-        stage1_params: list[dict[str, Any]],
+        stage1_params: list[Stage1NodeParams],
     ) -> list[int]:
         policy = self._seasonal_config().node_policy
         allowed = policy.allowed_nodes
@@ -293,7 +368,7 @@ class SeasonalAnomalyInjector:
         n: int,
         d: int,
         rng: np.random.Generator,
-        stage1_params: list[dict[str, Any]] | None = None,
+        stage1_params: list[Stage1NodeParams] | None = None,
     ) -> list[AnomalyEvent]:
         seasonal_cfg = self._seasonal_config()
         if d == 0 or stage1_params is None or rng.random() > float(seasonal_cfg.activation_p):
@@ -362,31 +437,35 @@ class SeasonalAnomalyInjector:
         self,
         kind: str,
         segment: np.ndarray,
-        params: dict[str, Any],
+        params: SeasonalEventParams,
         rng: np.random.Generator,
     ) -> np.ndarray:
         if kind == "waveform_inversion":
             return -segment
         if kind == "amplitude_scaling":
-            return float(params["scale"]) * segment
+            scale_params = cast(ScaleEventParams, params)
+            return float(scale_params["scale"]) * segment
         if kind == "frequency_change":
-            return self._frequency_warp(segment=segment, factor=float(params["factor"]))
+            factor_params = cast(FactorEventParams, params)
+            return self._frequency_warp(segment=segment, factor=float(factor_params["factor"]))
+        noise_params = cast(NoiseInjectionEventParams, params)
         std = float(np.std(segment)) + 1e-4
-        noise_scale = float(params.get("noise_scale", 0.5))
+        noise_scale = float(noise_params["noise_scale"])
         return segment + rng.normal(0.0, noise_scale * std, size=segment.size)
 
     def _apply_param_transform(
         self,
         kind: str,
-        season_params: dict[str, Any],
-        params: dict[str, Any],
-    ) -> dict[str, Any]:
+        season_params: SeasonalParams,
+        params: SeasonalEventParams,
+    ) -> SeasonalParams:
         updated = deepcopy(season_params)
         atoms = list(updated.get("atoms", []))
         updated["atoms"] = atoms
 
         if kind == "waveform_change":
-            target_type = str(params["target_type"])
+            type_params = cast(TargetTypeEventParams, params)
+            target_type = str(type_params["target_type"])
             updated["seasonality_type"] = target_type
             for atom in atoms:
                 atom["type"] = target_type
@@ -399,20 +478,22 @@ class SeasonalAnomalyInjector:
             return updated
 
         if kind == "phase_shift":
-            delta_phase = float(params["delta_phase"])
+            phase_params = cast(DeltaPhaseEventParams, params)
+            delta_phase = float(phase_params["delta_phase"])
             for atom in atoms:
                 atom["phase"] = float(atom.get("phase", 0.0)) + delta_phase
             return updated
 
         if kind == "add_harmonic":
+            harmonic_params = cast(HarmonicEventParams, params)
             atom_type = str(updated["seasonality_type"])
             atoms.append(
                 {
                     "type": atom_type,
-                    "period": float(params["period"]),
-                    "frequency": 1.0 / float(params["period"]),
-                    "amplitude": float(params["amplitude"]),
-                    "phase": float(params["phase"]),
+                    "period": float(harmonic_params["period"]),
+                    "frequency": 1.0 / float(harmonic_params["period"]),
+                    "amplitude": float(harmonic_params["amplitude"]),
+                    "phase": float(harmonic_params["phase"]),
                     "modulation_depth": 0.0,
                     "modulation_frequency": 0.0,
                     "modulation_phase": 0.0,
@@ -426,80 +507,92 @@ class SeasonalAnomalyInjector:
             return updated
 
         if kind == "remove_harmonic":
+            indexed_params = cast(IndexedEventParams, params)
             if atoms:
-                atoms.pop(int(params["index"]) % len(atoms))
+                atoms.pop(int(indexed_params["index"]) % len(atoms))
             return updated
 
         if kind == "modify_harmonic_phase":
+            phase_params = cast(IndexedDeltaPhaseEventParams, params)
             if atoms:
-                atom = atoms[int(params["index"]) % len(atoms)]
-                atom["phase"] = float(atom.get("phase", 0.0)) + float(params["delta_phase"])
+                atom = atoms[int(phase_params["index"]) % len(atoms)]
+                atom["phase"] = float(atom.get("phase", 0.0)) + float(phase_params["delta_phase"])
             return updated
 
         if kind == "modify_modulation_depth":
+            depth_params = cast(IndexedDepthEventParams, params)
             if atoms:
-                atom = atoms[int(params["index"]) % len(atoms)]
-                atom["modulation_depth"] = float(np.clip(float(params["depth"]), 0.0, 1.0))
+                atom = atoms[int(depth_params["index"]) % len(atoms)]
+                atom["modulation_depth"] = float(np.clip(float(depth_params["depth"]), 0.0, 1.0))
             return updated
 
         if kind == "modify_modulation_frequency":
+            frequency_params = cast(IndexedFrequencyEventParams, params)
             if atoms:
-                atom = atoms[int(params["index"]) % len(atoms)]
-                atom["modulation_frequency"] = max(0.0, float(params["frequency"]))
+                atom = atoms[int(frequency_params["index"]) % len(atoms)]
+                atom["modulation_frequency"] = max(0.0, float(frequency_params["frequency"]))
             return updated
 
         if kind == "modify_modulation_phase":
+            phase_params = cast(IndexedPhaseEventParams, params)
             if atoms:
-                atom = atoms[int(params["index"]) % len(atoms)]
-                atom["modulation_phase"] = float(params["phase"])
+                atom = atoms[int(phase_params["index"]) % len(atoms)]
+                atom["modulation_phase"] = float(phase_params["phase"])
             return updated
 
         if kind == "pulse_shift":
-            delta_cycle = float(params["delta_cycle"])
+            cycle_params = cast(DeltaCycleEventParams, params)
+            delta_cycle = float(cycle_params["delta_cycle"])
             for atom in atoms:
                 atom["cycle_shift"] = (float(atom.get("cycle_shift", 0.0)) + delta_cycle) % 1.0
             return updated
 
         if kind == "pulse_width_modulation":
-            factor = float(params["factor"])
+            factor_params = cast(FactorEventParams, params)
+            factor = float(factor_params["factor"])
             for atom in atoms:
                 duty = float(atom.get("duty_cycle", 0.5))
                 atom["duty_cycle"] = float(np.clip(duty * factor, 0.1, 0.9))
             return updated
 
         if kind == "wavelet_family_change" and atoms:
-            atom = atoms[int(params["index"]) % len(atoms)]
-            atom["family"] = str(params["target_family"])
+            family_params = cast(IndexedTargetFamilyEventParams, params)
+            atom = atoms[int(family_params["index"]) % len(atoms)]
+            atom["family"] = str(family_params["target_family"])
             atom["theta"] = {}
             return updated
 
         if kind == "wavelet_scale_change" and atoms:
-            atom = atoms[int(params["index"]) % len(atoms)]
-            atom["scale"] = float(np.clip(float(atom.get("scale", 0.18)) * float(params["factor"]), *self.config.stage1.wavelet_scale))
+            factor_params = cast(IndexedFactorEventParams, params)
+            atom = atoms[int(factor_params["index"]) % len(atoms)]
+            atom["scale"] = float(np.clip(float(atom.get("scale", 0.18)) * float(factor_params["factor"]), *self.config.stage1.wavelet_scale))
             return updated
 
         if kind == "wavelet_shift_change" and atoms:
-            atom = atoms[int(params["index"]) % len(atoms)]
-            shift = float(atom.get("shift", 0.0)) + float(params["delta_shift"])
+            shift_params = cast(IndexedDeltaShiftEventParams, params)
+            atom = atoms[int(shift_params["index"]) % len(atoms)]
+            shift = float(atom.get("shift", 0.0)) + float(shift_params["delta_shift"])
             atom["shift"] = float(shift % 1.0)
             return updated
 
         if kind == "wavelet_amplitude_change" and atoms:
-            atom = atoms[int(params["index"]) % len(atoms)]
-            atom["amplitude"] = float(atom.get("amplitude", 1.0)) * float(params["factor"])
+            factor_params = cast(IndexedFactorEventParams, params)
+            atom = atoms[int(factor_params["index"]) % len(atoms)]
+            atom["amplitude"] = float(atom.get("amplitude", 1.0)) * float(factor_params["factor"])
             return updated
 
         if kind == "add_wavelet":
+            wavelet_params = cast(AddWaveletEventParams, params)
             atoms.append(
                 {
                     "type": "wavelet",
-                    "period": float(params["period"]),
-                    "frequency": 1.0 / float(params["period"]),
-                    "amplitude": float(params["amplitude"]),
-                    "phase": float(params["phase"]),
-                    "family": str(params["family"]),
-                    "scale": float(params["scale"]),
-                    "shift": float(params["shift"]),
+                    "period": float(wavelet_params["period"]),
+                    "frequency": 1.0 / float(wavelet_params["period"]),
+                    "amplitude": float(wavelet_params["amplitude"]),
+                    "phase": float(wavelet_params["phase"]),
+                    "family": str(wavelet_params["family"]),
+                    "scale": float(wavelet_params["scale"]),
+                    "shift": float(wavelet_params["shift"]),
                     "theta": {},
                     "modulation_depth": 0.0,
                     "modulation_frequency": 0.0,
@@ -509,7 +602,8 @@ class SeasonalAnomalyInjector:
             return updated
 
         if kind == "remove_wavelet" and atoms:
-            atoms.pop(int(params["index"]) % len(atoms))
+            indexed_params = cast(IndexedEventParams, params)
+            atoms.pop(int(indexed_params["index"]) % len(atoms))
             return updated
 
         return updated
@@ -517,7 +611,7 @@ class SeasonalAnomalyInjector:
     def _seasonal_delta(
         self,
         t: np.ndarray,
-        season_params: dict[str, Any],
+        season_params: SeasonalParams,
         event: AnomalyEvent,
         rng: np.random.Generator,
     ) -> np.ndarray:
@@ -554,9 +648,9 @@ class SeasonalAnomalyInjector:
         events: list[AnomalyEvent],
         rng: np.random.Generator,
         t: np.ndarray,
-        stage1_params: list[dict[str, Any]],
+        stage1_params: list[Stage1NodeParams],
         arx=None,
-        arx_params: dict[str, Any] | None = None,
+        arx_params: ARXParams | None = None,
     ) -> tuple[np.ndarray, list[AnomalyEvent]]:
         x_out = x_input.copy()
         realized: list[AnomalyEvent] = []
@@ -567,7 +661,7 @@ class SeasonalAnomalyInjector:
             if node < 0 or node >= d:
                 continue
 
-            season_params = dict(stage1_params[node]["seasonality"])
+            season_params = deepcopy(stage1_params[node]["seasonality"])
             delta = self._seasonal_delta(t=t, season_params=season_params, event=event, rng=rng)
             if not np.any(np.abs(delta) > 1e-8):
                 realized.append(event)
@@ -611,9 +705,9 @@ class SeasonalAnomalyInjector:
         x_input: np.ndarray,
         rng: np.random.Generator,
         t: np.ndarray,
-        stage1_params: list[dict[str, Any]],
+        stage1_params: list[Stage1NodeParams],
         arx=None,
-        arx_params: dict[str, Any] | None = None,
+        arx_params: ARXParams | None = None,
     ) -> tuple[np.ndarray, list[AnomalyEvent]]:
         sampled = self.sample_events(n=x_input.shape[0], d=x_input.shape[1], rng=rng, stage1_params=stage1_params)
         return self.apply_events(

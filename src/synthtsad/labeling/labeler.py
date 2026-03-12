@@ -1,27 +1,54 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any
 
 import numpy as np
 
 from ..anomaly.local import AnomalyEvent
+from ..causal.arx import ARXState
+from ..causal.dag import CausalGraph
+from ..config import GeneratorConfig
+from ..interfaces import EventSummary, LabelPayload, Stage3EventRecord
 
 
 class LabelBuilder:
     """Build point/event/root-cause labels for generated samples."""
 
-    def __init__(self, config) -> None:
+    def __init__(self, config: GeneratorConfig) -> None:
         self.config = config
+
+    def _summarize_events(self, events: list[Stage3EventRecord]) -> EventSummary:
+        target_components: dict[str, int] = {}
+        local = 0
+        seasonal = 0
+        endogenous = 0
+
+        for event in events:
+            if event["family"] == "local":
+                local += 1
+            elif event["family"] == "seasonal":
+                seasonal += 1
+            if event["is_endogenous"]:
+                endogenous += 1
+            target = str(event["target_component"])
+            target_components[target] = target_components.get(target, 0) + 1
+
+        return {
+            "total": int(len(events)),
+            "local": int(local),
+            "seasonal": int(seasonal),
+            "endogenous": int(endogenous),
+            "target_components": target_components,
+        }
 
     def build(
         self,
         x_normal: np.ndarray,
         x_anom: np.ndarray,
         events: list[AnomalyEvent],
-        graph,
-        causal_state,
-    ) -> dict[str, Any]:
+        graph: CausalGraph | None,
+        causal_state: ARXState | None,
+    ) -> LabelPayload:
         _ = graph
         _ = causal_state
         t, _ = x_anom.shape
@@ -30,7 +57,7 @@ class LabelBuilder:
         point_mask = delta_mask.copy()
 
         root_to_nodes: dict[int, set[int]] = defaultdict(set)
-        event_records: list[dict[str, Any]] = []
+        event_records: list[Stage3EventRecord] = []
 
         for event in events:
             s = max(0, int(event.t_start))
@@ -51,7 +78,7 @@ class LabelBuilder:
                 root = int(event.root_cause_node)
                 root_to_nodes[root].update(affected)
 
-            event_record = event.to_dict()
+            event_record = event.to_record()
             event_record["affected_nodes"] = affected
             event_records.append(event_record)
 
@@ -66,4 +93,5 @@ class LabelBuilder:
             "root_cause": root_cause_nodes,
             "affected_nodes": affected_nodes,
             "is_anomalous_sample": int(point_mask_any.any()),
+            "summary": self._summarize_events(event_records),
         }

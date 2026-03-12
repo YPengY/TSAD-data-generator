@@ -1,11 +1,10 @@
 ﻿from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 
-from .anomaly.local import LocalAnomalyInjector
+from .anomaly.local import AnomalyEvent, LocalAnomalyInjector
 from .anomaly.seasonal import SeasonalAnomalyInjector
 from .causal.arx import ARXState, ARXSystem
 from .causal.dag import CausalGraph, CausalGraphSampler
@@ -13,6 +12,7 @@ from .components.noise import render_noise, sample_noise_params
 from .components.seasonality import render_seasonality, sample_seasonality_params
 from .components.trend import render_trend, sample_trend_params
 from .config import GeneratorConfig
+from .interfaces import GenerationMetadata, LabelPayload, Stage1NodeParams
 from .io.writer import DatasetWriter
 from .labeling.labeler import LabelBuilder
 
@@ -45,8 +45,8 @@ class SyntheticGeneratorPipeline:
         d = self.config.num_series.sample(rng)
         return n, d
 
-    def _sample_stage1_params(self, n: int, d: int, rng: np.random.Generator) -> list[dict[str, Any]]:
-        params: list[dict[str, Any]] = []
+    def _sample_stage1_params(self, n: int, d: int, rng: np.random.Generator) -> list[Stage1NodeParams]:
+        params: list[Stage1NodeParams] = []
         for node in range(d):
             params.append(
                 {
@@ -58,7 +58,7 @@ class SyntheticGeneratorPipeline:
             )
         return params
 
-    def _realize_stage1(self, t: np.ndarray, stage1_params: list[dict[str, Any]]) -> np.ndarray:
+    def _realize_stage1(self, t: np.ndarray, stage1_params: list[Stage1NodeParams]) -> np.ndarray:
         n = t.size
         d = len(stage1_params)
         x_base = np.zeros((n, d), dtype=float)
@@ -102,8 +102,8 @@ class SyntheticGeneratorPipeline:
             # Stage 3 (parameter/event sampling only)
             local_injector = LocalAnomalyInjector(self.config)
             seasonal_injector = SeasonalAnomalyInjector(self.config)
-            sampled_local_events = []
-            sampled_seasonal_events = []
+            sampled_local_events: list[AnomalyEvent] = []
+            sampled_seasonal_events: list[AnomalyEvent] = []
 
             if rng.random() < self.config.anomaly_sample_ratio:
                 if self.config.debug.enable_local_anomaly:
@@ -133,7 +133,7 @@ class SyntheticGeneratorPipeline:
             post_causal_local_events = [e for e in sampled_local_events if not bool(e.is_endogenous)]
 
             x_base_anom = x_base.copy()
-            realized_events = []
+            realized_events: list[AnomalyEvent] = []
             if pre_causal_local_events:
                 x_base_anom, local_events = local_injector.apply_events(
                     x_normal=x_base_anom,
@@ -169,7 +169,7 @@ class SyntheticGeneratorPipeline:
                 realized_events.extend(seasonal_events)
 
             # Stage 4 labels
-            labels = LabelBuilder(self.config).build(
+            labels: LabelPayload = LabelBuilder(self.config).build(
                 x_normal=x_normal,
                 x_anom=x_observed,
                 events=realized_events,
@@ -177,13 +177,15 @@ class SyntheticGeneratorPipeline:
                 causal_state=causal_state,
             )
 
-            metadata = {
-                "sample_seed_state": str(rng.bit_generator.state["state"]["state"]),
-                "stage1_params": stage1_params,
-                "stage2_params": arx_params,
-                "stage3_sampled_events": {
-                    "local": [e.to_dict() for e in sampled_local_events],
-                    "seasonal": [e.to_dict() for e in sampled_seasonal_events],
+            metadata: GenerationMetadata = {
+                "sample": {"seed_state": str(rng.bit_generator.state["state"]["state"])},
+                "stage1": {"params": stage1_params},
+                "stage2": {"params": arx_params},
+                "stage3": {
+                    "sampled_events": {
+                        "local": [e.to_record() for e in sampled_local_events],
+                        "seasonal": [e.to_record() for e in sampled_seasonal_events],
+                    }
                 },
             }
             writer.write_sample(

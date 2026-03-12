@@ -1,11 +1,11 @@
 ﻿from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 import numpy as np
 
 from ..config import GeneratorConfig
+from ..interfaces import ARXModelParams, ARXParams
 from ..utils import clamp_float
 from .dag import CausalGraph
 
@@ -13,7 +13,7 @@ from .dag import CausalGraph
 @dataclass
 class ARXState:
     z: np.ndarray  # latent causal channel, shape [T, D]
-    params: dict[str, Any]
+    params: ARXModelParams
 
 
 class ARXSystem:
@@ -23,7 +23,7 @@ class ARXSystem:
         self.config = config
         self.graph = graph
 
-    def sample_params(self, rng: np.random.Generator) -> dict[str, Any]:
+    def sample_params(self, rng: np.random.Generator) -> ARXParams:
         d = self.graph.num_nodes
         c = self.config.causal
 
@@ -56,7 +56,7 @@ class ARXSystem:
         self,
         x_base: np.ndarray,
         n_steps: int,
-        params: dict[str, Any],
+        params: ARXParams,
     ) -> tuple[np.ndarray, ARXState]:
         if x_base.ndim == 1:
             x_base = np.tile(x_base[:, None], (1, self.graph.num_nodes))
@@ -97,7 +97,7 @@ class ARXSystem:
         self,
         x_base: np.ndarray,
         n_steps: int,
-        params: dict[str, Any],
+        params: ARXParams,
     ) -> tuple[np.ndarray, ARXState]:
         linear_params = dict(params)
         linear_params["bias"] = [0.0 for _ in range(self.graph.num_nodes)]

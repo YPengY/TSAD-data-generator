@@ -6,6 +6,8 @@ from typing import Any
 
 import numpy as np
 
+from ..interfaces import GenerationMetadata, LabelPayload
+
 
 def _to_jsonable(value: Any) -> Any:
     if isinstance(value, dict):
@@ -42,9 +44,9 @@ class DatasetWriter:
         sample_id: int,
         normal_series: np.ndarray,
         observed_series: np.ndarray,
-        labels: dict[str, Any],
+        labels: LabelPayload,
         graph,
-        metadata: dict[str, Any],
+        metadata: GenerationMetadata,
     ) -> None:
         npz_path = self.output_dir / f"sample_{sample_id:06d}.npz"
         json_path = self.output_dir / f"sample_{sample_id:06d}.json"
@@ -61,14 +63,15 @@ class DatasetWriter:
             "summary": {
                 "sample_id": int(sample_id),
                 "length": int(observed_series.shape[0]),
-                "num_features": int(observed_series.shape[1]),
+                "num_series": int(observed_series.shape[1]),
                 "is_anomalous_sample": int(labels["is_anomalous_sample"]),
             },
             "labels": {
-                "root_cause": labels.get("root_cause", []),
-                "affected_nodes": labels.get("affected_nodes", {}),
+                "root_cause": labels["root_cause"],
+                "affected_nodes": labels["affected_nodes"],
+                "summary": labels["summary"],
             },
-            "events": labels.get("events", []),
+            "events": labels["events"],
             "graph": {
                 "num_nodes": int(graph.num_nodes),
                 "adjacency": graph.adjacency.tolist(),

@@ -59,4 +59,11 @@ def test_root_cause_affected_nodes_use_event_window_only() -> None:
     assert labels["affected_nodes"] == {"0": [0, 1]}
     assert labels["events"][0]["affected_nodes"] == [0, 1]
     assert labels["events"][1]["affected_nodes"] == [2]
+    assert labels["summary"] == {
+        "total": 2,
+        "local": 2,
+        "seasonal": 0,
+        "endogenous": 1,
+        "target_components": {"observed": 2},
+    }
     assert labels["point_mask_any"].tolist() == [0, 0, 1, 1, 1, 0, 0, 1, 1, 0]

@@ -1,12 +1,23 @@
 ﻿from __future__ import annotations
 
 import numpy as np
+from typing import TypeGuard
 
 from ..config import GeneratorConfig
+from ..interfaces import ArimaTrendParams, LinearTrendParams, MultipleTrendParams, TrendParams
 from ..utils import weighted_choice
 
 
-TrendParams = dict[str, float | int | str | list[float] | list[int]]
+def _is_linear_trend_params(params: TrendParams) -> TypeGuard[LinearTrendParams]:
+    return params["trend_type"] in {"increase", "decrease", "keep_steady"}
+
+
+def _is_multiple_trend_params(params: TrendParams) -> TypeGuard[MultipleTrendParams]:
+    return params["trend_type"] == "multiple"
+
+
+def _is_arima_trend_params(params: TrendParams) -> TypeGuard[ArimaTrendParams]:
+    return params["trend_type"] == "arima"
 
 
 def _piecewise_linear(t: np.ndarray, k0: float, k1: float, cps: np.ndarray, deltas: np.ndarray) -> np.ndarray:
@@ -92,21 +103,21 @@ def sample_trend_params(n: int, config: GeneratorConfig, rng: np.random.Generato
 
     if trend_type == "increase":
         return {
-            "trend_type": trend_type,
+            "trend_type": "increase",
             "k0": float(rng.normal(0.0, 0.2)),
             "k1": float(rng.uniform(0.25 * slope_scale, 1.2 * slope_scale)),
         }
 
     if trend_type == "decrease":
         return {
-            "trend_type": trend_type,
+            "trend_type": "decrease",
             "k0": float(rng.normal(0.0, 0.2)),
             "k1": float(-rng.uniform(0.25 * slope_scale, 1.2 * slope_scale)),
         }
 
     if trend_type == "keep_steady":
         return {
-            "trend_type": trend_type,
+            "trend_type": "keep_steady",
             "k0": float(rng.normal(0.0, 0.5)),
             "k1": 0.0,
         }
@@ -117,7 +128,7 @@ def sample_trend_params(n: int, config: GeneratorConfig, rng: np.random.Generato
         cps = np.sort(rng.choice(np.arange(1, n - 1), size=cp_count, replace=False)).astype(int)
         deltas = rng.normal(0.0, 0.75 * slope_scale, size=cp_count).astype(float)
         return {
-            "trend_type": trend_type,
+            "trend_type": "multiple",
             "k0": float(rng.normal(0.0, 0.2)),
             "k1": float(rng.normal(0.0, slope_scale)),
             "change_points": cps.tolist(),
@@ -142,41 +153,31 @@ def sample_trend_params(n: int, config: GeneratorConfig, rng: np.random.Generato
         "theta": theta,
         "sigma": float(config.stage1.arima_noise_scale),
         "base_level": float(rng.normal(0.0, 0.2)),
-        # Kept for backward compatibility with existing consumers.
-        "noise_scale": float(config.stage1.arima_noise_scale),
         "stochastic_seed": int(rng.integers(0, 2**31 - 1)),
     }
 
 
 def render_trend(t: np.ndarray, params: TrendParams) -> np.ndarray:
-    trend_type = str(params["trend_type"])
-
-    if trend_type in {"increase", "decrease", "keep_steady"}:
+    if _is_linear_trend_params(params):
         k0 = float(params["k0"])
         k1 = float(params["k1"])
         return k0 + k1 * t
 
-    if trend_type == "multiple":
+    if _is_multiple_trend_params(params):
         cps = np.array(params["change_points"], dtype=float)
         deltas = np.array(params["slope_deltas"], dtype=float)
         return _piecewise_linear(t, float(params["k0"]), float(params["k1"]), cps, deltas)
 
+    if not _is_arima_trend_params(params):
+        raise ValueError(f"Unsupported trend params: {params}")
+
     seed = int(params["stochastic_seed"])
     rng = np.random.default_rng(seed)
-
-    if isinstance(params.get("phi"), list):
-        phi = np.array(params.get("phi", []), dtype=float)
-        theta = np.array(params.get("theta", []), dtype=float)
-        d_order = int(params.get("d", 1))
-        sigma = float(params.get("sigma", params.get("noise_scale", 0.05)))
-        base_level = float(params.get("base_level", 0.0))
-    else:
-        # Backward-compatible path for old ARIMA-like parameters.
-        phi = np.array([float(params["phi"])], dtype=float)
-        theta = np.array([], dtype=float)
-        d_order = 1
-        sigma = float(params.get("noise_scale", 0.05))
-        base_level = 0.0
+    phi = np.array(params["phi"], dtype=float)
+    theta = np.array(params["theta"], dtype=float)
+    d_order = int(params["d"])
+    sigma = float(params["sigma"])
+    base_level = float(params["base_level"])
 
     diff_series = _simulate_differenced_arma(
         n=t.size,
