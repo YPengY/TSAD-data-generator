@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 
@@ -12,7 +12,14 @@ from .components.noise import render_noise, sample_noise_params
 from .components.seasonality import render_seasonality, sample_seasonality_params
 from .components.trend import render_trend, sample_trend_params
 from .config import GeneratorConfig
-from .interfaces import GenerationMetadata, LabelPayload, Stage1NodeParams
+from .interfaces import (
+    ARXModelParams,
+    ARXParams,
+    DisabledARXParams,
+    GenerationMetadata,
+    LabelPayload,
+    Stage1NodeParams,
+)
 from .io.writer import DatasetWriter
 from .labeling.labeler import LabelBuilder
 
@@ -37,15 +44,21 @@ class SyntheticGeneratorPipeline:
     def _disabled_causal_state(self, n: int, d: int) -> ARXState:
         return ARXState(
             z=np.zeros((n, d), dtype=float),
-            params={"disabled": True},
+            params=self._disabled_arx_params(),
         )
+
+    @staticmethod
+    def _disabled_arx_params() -> DisabledARXParams:
+        return {"disabled": True}
 
     def _sample_dimensions(self, rng: np.random.Generator) -> tuple[int, int]:
         n = self.config.sequence_length.sample(rng)
         d = self.config.num_series.sample(rng)
         return n, d
 
-    def _sample_stage1_params(self, n: int, d: int, rng: np.random.Generator) -> list[Stage1NodeParams]:
+    def _sample_stage1_params(
+        self, n: int, d: int, rng: np.random.Generator
+    ) -> list[Stage1NodeParams]:
         params: list[Stage1NodeParams] = []
         for node in range(d):
             params.append(
@@ -65,13 +78,21 @@ class SyntheticGeneratorPipeline:
 
         for spec in stage1_params:
             node = int(spec["node"])
-            trend = render_trend(t=t, params=spec["trend"]) if self.config.debug.enable_trend else np.zeros(n, dtype=float)
+            trend = (
+                render_trend(t=t, params=spec["trend"])
+                if self.config.debug.enable_trend
+                else np.zeros(n, dtype=float)
+            )
             season = (
                 render_seasonality(t=t, params=spec["seasonality"])
                 if self.config.debug.enable_seasonality
                 else np.zeros(n, dtype=float)
             )
-            noise = render_noise(n=n, params=spec["noise"]) if self.config.debug.enable_noise else np.zeros(n, dtype=float)
+            noise = (
+                render_noise(n=n, params=spec["noise"])
+                if self.config.debug.enable_noise
+                else np.zeros(n, dtype=float)
+            )
             x_base[:, node] = trend + season + noise
 
         return x_base
@@ -93,11 +114,13 @@ class SyntheticGeneratorPipeline:
             if self.config.debug.enable_causal:
                 graph = CausalGraphSampler(self.config).sample_graph(num_nodes=d, rng=rng)
                 arx = ARXSystem(self.config, graph)
-                arx_params = arx.sample_params(rng)
+                active_arx_params: ARXParams | None = arx.sample_params(rng)
+                arx_params: ARXModelParams = active_arx_params
             else:
                 graph = self._empty_graph(d)
                 arx = ARXSystem(self.config, graph)
-                arx_params = {"disabled": True}
+                active_arx_params = None
+                arx_params = self._disabled_arx_params()
 
             # Stage 3 (parameter/event sampling only)
             local_injector = LocalAnomalyInjector(self.config)
@@ -107,7 +130,9 @@ class SyntheticGeneratorPipeline:
 
             if rng.random() < self.config.anomaly_sample_ratio:
                 if self.config.debug.enable_local_anomaly:
-                    sampled_local_events = local_injector.sample_events(n=n, d=d, rng=rng, graph=graph)
+                    sampled_local_events = local_injector.sample_events(
+                        n=n, d=d, rng=rng, graph=graph
+                    )
                 if self.config.debug.enable_seasonal_anomaly:
                     sampled_seasonal_events = seasonal_injector.sample_events(
                         n=n,
@@ -130,7 +155,9 @@ class SyntheticGeneratorPipeline:
             # Endogenous local events are injected before causal realization so they
             # propagate naturally through the structural dynamics.
             pre_causal_local_events = [e for e in sampled_local_events if bool(e.is_endogenous)]
-            post_causal_local_events = [e for e in sampled_local_events if not bool(e.is_endogenous)]
+            post_causal_local_events = [
+                e for e in sampled_local_events if not bool(e.is_endogenous)
+            ]
 
             x_base_anom = x_base.copy()
             realized_events: list[AnomalyEvent] = []
@@ -142,8 +169,13 @@ class SyntheticGeneratorPipeline:
                 realized_events.extend(local_events)
 
             if self.config.debug.enable_causal:
-                x_normal, causal_state = arx.simulate_with_params(x_base=x_base, n_steps=n, params=arx_params)
-                x_observed, _ = arx.simulate_with_params(x_base=x_base_anom, n_steps=n, params=arx_params)
+                assert active_arx_params is not None
+                x_normal, causal_state = arx.simulate_with_params(
+                    x_base=x_base, n_steps=n, params=active_arx_params
+                )
+                x_observed, _ = arx.simulate_with_params(
+                    x_base=x_base_anom, n_steps=n, params=active_arx_params
+                )
             else:
                 x_normal = x_base.copy()
                 x_observed = x_base_anom.copy()
@@ -164,7 +196,7 @@ class SyntheticGeneratorPipeline:
                     t=t,
                     stage1_params=stage1_params,
                     arx=arx if self.config.debug.enable_causal else None,
-                    arx_params=arx_params if self.config.debug.enable_causal else None,
+                    arx_params=active_arx_params,
                 )
                 realized_events.extend(seasonal_events)
 

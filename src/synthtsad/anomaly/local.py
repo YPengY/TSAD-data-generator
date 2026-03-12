@@ -2,38 +2,40 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import TypeAlias, cast
 
 import numpy as np
 
 from ..config import GeneratorConfig
 from ..interfaces import (
     AsymmetricEventParams,
+    AsymmetricLocalSpec,
     BurstSpikeEventParams,
+    BurstSpikeLocalSpec,
     EventFamily,
     EventParams,
-    LocalTypeSpec,
     LocalEventParams,
-    OutlierLocalSpec,
+    LocalTypeSpec,
     OutlierEventParams,
-    PlateauLocalSpec,
+    OutlierLocalSpec,
     PlateauEventParams,
+    PlateauLocalSpec,
     RangeConfig,
     ShakeEventParams,
     ShakeLocalSpec,
-    SpikeLevelLocalSpec,
     SpikeEventParams,
-    SpikeLocalSpec,
     SpikeLevelEventParams,
+    SpikeLevelLocalSpec,
+    SpikeLocalSpec,
     Stage3EventRecord,
-    SuddenShiftLocalSpec,
     SuddenShiftEventParams,
-    WideSpikeLocalSpec,
+    SuddenShiftLocalSpec,
     WideSpikeEventParams,
-    BurstSpikeLocalSpec,
-    AsymmetricLocalSpec,
+    WideSpikeLocalSpec,
 )
 from ..utils import IntRange, weighted_choice
+
+SampledLocalTemplate: TypeAlias = tuple[int, int, LocalEventParams]
 
 
 @dataclass
@@ -64,28 +66,527 @@ class AnomalyEvent:
         }
 
 
+class LocalAnomalyHandler:
+    def sample(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        rng: np.random.Generator,
+        spec: LocalTypeSpec,
+    ) -> SampledLocalTemplate:
+        raise NotImplementedError
+
+    def render(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        t_start: int,
+        t_end: int,
+        params: LocalEventParams,
+    ) -> np.ndarray:
+        raise NotImplementedError
+
+
+_LOCAL_HANDLER_REGISTRY: dict[str, LocalAnomalyHandler] = {}
+
+
+def register_local_handler(*kinds: str):
+    def decorator(handler_cls):
+        handler = handler_cls()
+        for kind in kinds:
+            _LOCAL_HANDLER_REGISTRY[kind] = handler
+        return handler_cls
+
+    return decorator
+
+
+@register_local_handler("outlier")
+class OutlierHandler(LocalAnomalyHandler):
+    def sample(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        rng: np.random.Generator,
+        spec: LocalTypeSpec,
+    ) -> SampledLocalTemplate:
+        _ = kind
+        outlier_spec = cast(OutlierLocalSpec, spec)
+        t0 = int(rng.integers(0, n))
+        amplitude = injector._sample_float(outlier_spec["amplitude"], rng)
+        min_abs = float(outlier_spec["min_abs_amplitude"])
+        if abs(amplitude) < min_abs:
+            amplitude = min_abs if amplitude >= 0.0 else -min_abs
+        params: OutlierEventParams = {"amplitude": amplitude, "t0": t0}
+        return t0, t0 + 1, params
+
+    def render(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        t_start: int,
+        t_end: int,
+        params: LocalEventParams,
+    ) -> np.ndarray:
+        _ = injector
+        _ = kind
+        _ = t_start
+        _ = t_end
+        delta = np.zeros(n, dtype=float)
+        outlier_params = cast(OutlierEventParams, params)
+        t0 = int(outlier_params["t0"])
+        if 0 <= t0 < n:
+            delta[t0] = float(outlier_params["amplitude"])
+        return delta
+
+
+@register_local_handler("upward_spike", "downward_spike")
+class SingleSpikeHandler(LocalAnomalyHandler):
+    def sample(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        rng: np.random.Generator,
+        spec: LocalTypeSpec,
+    ) -> SampledLocalTemplate:
+        _ = kind
+        spike_spec = cast(SpikeLocalSpec, spec)
+        t_start, t_end = injector._sample_window(n=n, rng=rng, spec=spec, min_len=5)
+        return (
+            t_start,
+            t_end,
+            injector._sample_spike_params(spec=spike_spec, t_start=t_start, t_end=t_end, rng=rng),
+        )
+
+    def render(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        t_start: int,
+        t_end: int,
+        params: LocalEventParams,
+    ) -> np.ndarray:
+        _ = t_start
+        _ = t_end
+        delta = np.zeros(n, dtype=float)
+        idx = np.arange(max(0, t_start), min(n, t_end))
+        spike_params = cast(SpikeEventParams, params)
+        sign = 1.0 if kind == "upward_spike" else -1.0
+        delta[idx] = injector._render_triangular_spike(
+            idx=idx,
+            center=int(spike_params["center"]),
+            half_width=int(spike_params["half_width"]),
+            amplitude=float(spike_params["amplitude"]),
+            sign=sign,
+        )
+        return delta
+
+
+@register_local_handler("continuous_upward_spikes", "continuous_downward_spikes")
+class BurstSpikeHandler(LocalAnomalyHandler):
+    def sample(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        rng: np.random.Generator,
+        spec: LocalTypeSpec,
+    ) -> SampledLocalTemplate:
+        _ = kind
+        burst_spec = cast(BurstSpikeLocalSpec, spec)
+        t_start, t_end = injector._sample_window(n=n, rng=rng, spec=spec, min_len=10)
+        window = max(2, t_end - t_start)
+        _, configured_max = injector._range_bounds(burst_spec["spike_count"], integer=True)
+        spike_cap = max(2, min(int(configured_max), max(2, window // 2)))
+        sampled_count = injector._sample_int(
+            burst_spec["spike_count"], rng, low_clip=2, high_clip=spike_cap
+        )
+        stride_cap = max(
+            1,
+            min(
+                injector._range_bounds(burst_spec["stride"], integer=True)[1],
+                window // max(2, sampled_count),
+            ),
+        )
+        stride = injector._sample_int(
+            burst_spec["stride"], rng, low_clip=1, high_clip=int(stride_cap)
+        )
+        amplitudes = [
+            injector._sample_float(burst_spec["amplitude"], rng) for _ in range(sampled_count)
+        ]
+        width_cap = max(
+            1,
+            min(
+                int(injector._range_bounds(burst_spec["half_width"], integer=True)[1]),
+                window // 2 + 1,
+            ),
+        )
+        widths = [
+            injector._sample_int(burst_spec["half_width"], rng, low_clip=1, high_clip=width_cap)
+            for _ in range(sampled_count)
+        ]
+        params: BurstSpikeEventParams = {
+            "spike_count": sampled_count,
+            "stride": stride,
+            "amplitudes": amplitudes,
+            "widths": widths,
+            "t0": t_start,
+        }
+        return t_start, t_end, params
+
+    def render(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        t_start: int,
+        t_end: int,
+        params: LocalEventParams,
+    ) -> np.ndarray:
+        _ = t_start
+        delta = np.zeros(n, dtype=float)
+        idx = np.arange(max(0, t_start), min(n, t_end))
+        burst_params = cast(BurstSpikeEventParams, params)
+        sign = 1.0 if kind == "continuous_upward_spikes" else -1.0
+        spike_count = int(burst_params["spike_count"])
+        stride = int(burst_params["stride"])
+        t0 = int(burst_params["t0"])
+        amplitudes = [float(v) for v in burst_params["amplitudes"]]
+        widths = [int(v) for v in burst_params["widths"]]
+        for offset in range(spike_count):
+            delta[idx] += injector._render_triangular_spike(
+                idx=idx,
+                center=t0 + offset * stride,
+                half_width=widths[offset],
+                amplitude=amplitudes[offset],
+                sign=sign,
+            )
+        return delta
+
+
+@register_local_handler("wide_upward_spike", "wide_downward_spike")
+class WideSpikeHandler(LocalAnomalyHandler):
+    def sample(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        rng: np.random.Generator,
+        spec: LocalTypeSpec,
+    ) -> SampledLocalTemplate:
+        _ = kind
+        wide_spec = cast(WideSpikeLocalSpec, spec)
+        t_start, t_end = injector._sample_window(n=n, rng=rng, spec=spec, min_len=8)
+        window = max(3, t_end - t_start)
+        rise_length = injector._sample_int(
+            wide_spec["rise_length"], rng, low_clip=1, high_clip=window - 1
+        )
+        fall_length = injector._sample_int(
+            wide_spec["fall_length"], rng, low_clip=1, high_clip=window - 1
+        )
+        params: WideSpikeEventParams = {
+            "amplitude": injector._sample_float(wide_spec["amplitude"], rng),
+            "rise_length": rise_length,
+            "fall_length": fall_length,
+        }
+        return t_start, t_end, params
+
+    def render(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        t_start: int,
+        t_end: int,
+        params: LocalEventParams,
+    ) -> np.ndarray:
+        delta = np.zeros(n, dtype=float)
+        idx = np.arange(max(0, t_start), min(n, t_end))
+        wide_params = cast(WideSpikeEventParams, params)
+        sign = 1.0 if kind == "wide_upward_spike" else -1.0
+        delta[idx] = injector._render_wide_spike(
+            idx=idx,
+            t_start=t_start,
+            t_end=t_end,
+            amplitude=float(wide_params["amplitude"]),
+            rise_length=int(wide_params["rise_length"]),
+            fall_length=int(wide_params["fall_length"]),
+            sign=sign,
+        )
+        return delta
+
+
+@register_local_handler("sudden_increase", "sudden_decrease")
+class SuddenShiftHandler(LocalAnomalyHandler):
+    def sample(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        rng: np.random.Generator,
+        spec: LocalTypeSpec,
+    ) -> SampledLocalTemplate:
+        _ = kind
+        shift_spec = cast(SuddenShiftLocalSpec, spec)
+        t_start, t_end = injector._sample_window(n=n, rng=rng, spec=spec, min_len=6)
+        params: SuddenShiftEventParams = {
+            "amplitude": injector._sample_float(shift_spec["amplitude"], rng),
+            "t0": int(rng.integers(t_start, t_end)),
+            "kappa": injector._sample_float(shift_spec["kappa"], rng, low_clip=1e-6),
+        }
+        return t_start, t_end, params
+
+    def render(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        t_start: int,
+        t_end: int,
+        params: LocalEventParams,
+    ) -> np.ndarray:
+        _ = injector
+        delta = np.zeros(n, dtype=float)
+        idx = np.arange(max(0, t_start), min(n, t_end))
+        shift_params = cast(SuddenShiftEventParams, params)
+        sign = 1.0 if kind == "sudden_increase" else -1.0
+        t0 = int(shift_params["t0"])
+        kappa = float(shift_params["kappa"])
+        logits = kappa * (idx - t0)
+        delta[idx] = sign * float(shift_params["amplitude"]) * (1.0 / (1.0 + np.exp(-logits)))
+        return delta
+
+
+@register_local_handler("plateau", "convex_plateau", "concave_plateau")
+class PlateauHandler(LocalAnomalyHandler):
+    def sample(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        rng: np.random.Generator,
+        spec: LocalTypeSpec,
+    ) -> SampledLocalTemplate:
+        plateau_spec = cast(PlateauLocalSpec, spec)
+        t_start, t_end = injector._sample_window(n=n, rng=rng, spec=spec, min_len=6)
+        positive_p = float(plateau_spec.get("positive_p", 0.5))
+        amplitude_range = plateau_spec.get("amplitude")
+        if amplitude_range is None:
+            raise ValueError("Plateau anomaly spec requires an amplitude range.")
+        sign = (
+            1.0
+            if kind == "convex_plateau"
+            else -1.0
+            if kind == "concave_plateau"
+            else (1.0 if rng.random() < positive_p else -1.0)
+        )
+        params: PlateauEventParams = {
+            "amplitude": injector._sample_float(amplitude_range, rng),
+            "sign": sign,
+        }
+        return t_start, t_end, params
+
+    def render(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        t_start: int,
+        t_end: int,
+        params: LocalEventParams,
+    ) -> np.ndarray:
+        _ = injector
+        _ = kind
+        delta = np.zeros(n, dtype=float)
+        idx = np.arange(max(0, t_start), min(n, t_end))
+        rel = np.arange(idx.size)
+        plateau_params = cast(PlateauEventParams, params)
+        phase = np.pi * rel / max(1, idx.size - 1)
+        delta[idx] = (
+            float(plateau_params["sign"])
+            * float(plateau_params["amplitude"])
+            * 0.5
+            * (1.0 - np.cos(phase))
+        )
+        return delta
+
+
+@register_local_handler(
+    "rapid_rise_slow_decline",
+    "slow_rise_rapid_decline",
+    "rapid_decline_slow_rise",
+    "slow_decline_rapid_rise",
+)
+class AsymmetricHandler(LocalAnomalyHandler):
+    def sample(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        rng: np.random.Generator,
+        spec: LocalTypeSpec,
+    ) -> SampledLocalTemplate:
+        asymmetric_spec = cast(AsymmetricLocalSpec, spec)
+        t_start, t_end = injector._sample_window(n=n, rng=rng, spec=spec, min_len=8)
+        peak = int(rng.integers(t_start + 1, t_end))
+        rapid = injector._sample_float(asymmetric_spec["rapid_tau"], rng, low_clip=1e-6)
+        slow = injector._sample_float(asymmetric_spec["slow_tau"], rng, low_clip=1e-6)
+        rise_tau = rapid if "rapid_rise" in kind or "slow_decline_rapid_rise" in kind else slow
+        fall_tau = rapid if "rapid_decline" in kind or "slow_rise_rapid_decline" in kind else slow
+        sign = -1.0 if kind in {"rapid_decline_slow_rise", "slow_decline_rapid_rise"} else 1.0
+        params: AsymmetricEventParams = {
+            "amplitude": injector._sample_float(asymmetric_spec["amplitude"], rng),
+            "peak": peak,
+            "rise_tau": rise_tau,
+            "fall_tau": fall_tau,
+            "sign": sign,
+        }
+        return t_start, t_end, params
+
+    def render(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        t_start: int,
+        t_end: int,
+        params: LocalEventParams,
+    ) -> np.ndarray:
+        _ = kind
+        delta = np.zeros(n, dtype=float)
+        idx = np.arange(max(0, t_start), min(n, t_end))
+        asymmetric_params = cast(AsymmetricEventParams, params)
+        delta[idx] = injector._render_asymmetric_transient(
+            idx=idx,
+            t_start=t_start,
+            peak=int(asymmetric_params["peak"]),
+            amplitude=float(asymmetric_params["amplitude"]),
+            rise_tau=float(asymmetric_params["rise_tau"]),
+            fall_tau=float(asymmetric_params["fall_tau"]),
+            sign=float(asymmetric_params["sign"]),
+        )
+        return delta
+
+
+@register_local_handler(
+    "decrease_after_upward_spike",
+    "increase_after_downward_spike",
+    "increase_after_upward_spike",
+    "decrease_after_downward_spike",
+)
+class SpikeLevelHandler(LocalAnomalyHandler):
+    def sample(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        rng: np.random.Generator,
+        spec: LocalTypeSpec,
+    ) -> SampledLocalTemplate:
+        _ = kind
+        spike_level_spec = cast(SpikeLevelLocalSpec, spec)
+        t_start, t_end = injector._sample_window(n=n, rng=rng, spec=spec, min_len=8)
+        spike = injector._sample_spike_params(
+            spec=spike_level_spec, t_start=t_start, t_end=t_end, rng=rng
+        )
+        shift_start = int(min(n - 1, max(spike["center"], t_end - 1)))
+        shift_magnitude = injector._sample_float(spike_level_spec["shift_magnitude"], rng)
+        params: SpikeLevelEventParams = {
+            "amplitude": float(spike["amplitude"]),
+            "center": int(spike["center"]),
+            "half_width": int(spike["half_width"]),
+            "shift_start": shift_start,
+            "shift_magnitude": shift_magnitude,
+        }
+        return t_start, n, params
+
+    def render(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        t_start: int,
+        t_end: int,
+        params: LocalEventParams,
+    ) -> np.ndarray:
+        _ = t_start
+        _ = t_end
+        spike_level_params = cast(SpikeLevelEventParams, params)
+        spike_sign = 1.0 if "upward" in kind else -1.0
+        shift_sign = (
+            1.0
+            if kind in {"increase_after_downward_spike", "increase_after_upward_spike"}
+            else -1.0
+        )
+        spike = injector._render_triangular_spike(
+            idx=np.arange(n),
+            center=int(spike_level_params["center"]),
+            half_width=int(spike_level_params["half_width"]),
+            amplitude=float(spike_level_params["amplitude"]),
+            sign=spike_sign,
+        )
+        shift = np.zeros(n, dtype=float)
+        shift_start = int(spike_level_params["shift_start"])
+        if shift_start < n:
+            shift[shift_start:] = shift_sign * float(spike_level_params["shift_magnitude"])
+        return spike + shift
+
+
+@register_local_handler("shake")
+class ShakeHandler(LocalAnomalyHandler):
+    def sample(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        rng: np.random.Generator,
+        spec: LocalTypeSpec,
+    ) -> SampledLocalTemplate:
+        _ = kind
+        shake_spec = cast(ShakeLocalSpec, spec)
+        t_start, t_end = injector._sample_window(n=n, rng=rng, spec=spec, min_len=10)
+        params: ShakeEventParams = {
+            "amplitude": injector._sample_float(shake_spec["amplitude"], rng),
+            "freq": injector._sample_float(shake_spec["frequency"], rng),
+            "phase": injector._sample_float(shake_spec["phase"], rng),
+        }
+        return t_start, t_end, params
+
+    def render(
+        self,
+        injector: LocalAnomalyInjector,
+        kind: str,
+        n: int,
+        t_start: int,
+        t_end: int,
+        params: LocalEventParams,
+    ) -> np.ndarray:
+        _ = injector
+        _ = kind
+        delta = np.zeros(n, dtype=float)
+        idx = np.arange(max(0, t_start), min(n, t_end))
+        rel = np.arange(idx.size)
+        shake_params = cast(ShakeEventParams, params)
+        freq = float(shake_params["freq"])
+        phase = float(shake_params["phase"])
+        window = np.sin(np.pi * rel / max(1, idx.size - 1)) ** 2
+        delta[idx] = (
+            float(shake_params["amplitude"]) * window * np.sin(2 * np.pi * freq * rel + phase)
+        )
+        return delta
+
+
 class LocalAnomalyInjector:
     """Stage 3 local/change anomalies with parameter-first templates."""
 
-    _SINGLE_SPIKE_TYPES = {"upward_spike", "downward_spike"}
-    _BURST_SPIKE_TYPES = {"continuous_upward_spikes", "continuous_downward_spikes"}
-    _WIDE_SPIKE_TYPES = {"wide_upward_spike", "wide_downward_spike"}
-    _SUDDEN_SHIFT_TYPES = {"sudden_increase", "sudden_decrease"}
-    _ASYMMETRIC_TYPES = {
-        "rapid_rise_slow_decline",
-        "slow_rise_rapid_decline",
-        "rapid_decline_slow_rise",
-        "slow_decline_rapid_rise",
-    }
-    _SPIKE_LEVEL_TYPES = {
-        "decrease_after_upward_spike",
-        "increase_after_downward_spike",
-        "increase_after_upward_spike",
-        "decrease_after_downward_spike",
-    }
-
     def __init__(self, config: GeneratorConfig) -> None:
         self.config = config
+        self._handlers = _LOCAL_HANDLER_REGISTRY
 
     def _local_config(self):
         return self.config.anomaly.local
@@ -178,7 +679,9 @@ class LocalAnomalyInjector:
         params: SpikeEventParams = {
             "amplitude": self._sample_float(spec["amplitude"], rng),
             "center": int(rng.integers(t_start, t_end)),
-            "half_width": self._sample_int(spec["half_width"], rng, low_clip=1, high_clip=width_cap),
+            "half_width": self._sample_int(
+                spec["half_width"], rng, low_clip=1, high_clip=width_cap
+            ),
         }
         return params
 
@@ -189,131 +692,22 @@ class LocalAnomalyInjector:
         rng: np.random.Generator,
         spec: LocalTypeSpec,
     ) -> tuple[int, int, LocalEventParams]:
-        if kind == "outlier":
-            outlier_spec = cast(OutlierLocalSpec, spec)
-            t0 = int(rng.integers(0, n))
-            amplitude = self._sample_float(outlier_spec["amplitude"], rng)
-            min_abs = float(outlier_spec["min_abs_amplitude"])
-            if abs(amplitude) < min_abs:
-                amplitude = min_abs if amplitude >= 0.0 else -min_abs
-            params: OutlierEventParams = {"amplitude": amplitude, "t0": t0}
-            return t0, t0 + 1, params
+        handler = self._handler_for_kind(kind)
+        return handler.sample(injector=self, kind=kind, n=n, rng=rng, spec=spec)
 
-        if kind in self._SPIKE_LEVEL_TYPES:
-            spike_level_spec = cast(SpikeLevelLocalSpec, spec)
-            t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=8)
-            spike = self._sample_spike_params(spec=spike_level_spec, t_start=t_start, t_end=t_end, rng=rng)
-            shift_start = int(min(n - 1, max(spike["center"], t_end - 1)))
-            shift_magnitude = self._sample_float(spike_level_spec["shift_magnitude"], rng)
-            params: SpikeLevelEventParams = {
-                "amplitude": float(spike["amplitude"]),
-                "center": int(spike["center"]),
-                "half_width": int(spike["half_width"]),
-                "shift_start": shift_start,
-                "shift_magnitude": shift_magnitude,
-            }
-            return t_start, n, params
-
-        if kind in self._SINGLE_SPIKE_TYPES:
-            spike_spec = cast(SpikeLocalSpec, spec)
-            t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=5)
-            return t_start, t_end, self._sample_spike_params(spec=spike_spec, t_start=t_start, t_end=t_end, rng=rng)
-
-        if kind in self._BURST_SPIKE_TYPES:
-            burst_spec = cast(BurstSpikeLocalSpec, spec)
-            t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=10)
-            window = max(2, t_end - t_start)
-            _, configured_max = self._range_bounds(burst_spec["spike_count"], integer=True)
-            spike_cap = max(2, min(int(configured_max), max(2, window // 2)))
-            sampled_count = self._sample_int(burst_spec["spike_count"], rng, low_clip=2, high_clip=spike_cap)
-            stride_cap = max(1, min(self._range_bounds(burst_spec["stride"], integer=True)[1], window // max(2, sampled_count)))
-            stride = self._sample_int(burst_spec["stride"], rng, low_clip=1, high_clip=int(stride_cap))
-            amplitudes = [self._sample_float(burst_spec["amplitude"], rng) for _ in range(sampled_count)]
-            width_cap = max(1, min(int(self._range_bounds(burst_spec["half_width"], integer=True)[1]), window // 2 + 1))
-            widths = [
-                self._sample_int(burst_spec["half_width"], rng, low_clip=1, high_clip=width_cap)
-                for _ in range(sampled_count)
-            ]
-            params: BurstSpikeEventParams = {
-                "spike_count": sampled_count,
-                "stride": stride,
-                "amplitudes": amplitudes,
-                "widths": widths,
-                "t0": t_start,
-            }
-            return t_start, t_end, params
-
-        if kind in self._WIDE_SPIKE_TYPES:
-            wide_spec = cast(WideSpikeLocalSpec, spec)
-            t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=8)
-            window = max(3, t_end - t_start)
-            rise_length = self._sample_int(wide_spec["rise_length"], rng, low_clip=1, high_clip=window - 1)
-            fall_length = self._sample_int(wide_spec["fall_length"], rng, low_clip=1, high_clip=window - 1)
-            params: WideSpikeEventParams = {
-                "amplitude": self._sample_float(wide_spec["amplitude"], rng),
-                "rise_length": rise_length,
-                "fall_length": fall_length,
-            }
-            return t_start, t_end, params
-
-        if kind in self._SUDDEN_SHIFT_TYPES:
-            shift_spec = cast(SuddenShiftLocalSpec, spec)
-            t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=6)
-            params: SuddenShiftEventParams = {
-                "amplitude": self._sample_float(shift_spec["amplitude"], rng),
-                "t0": int(rng.integers(t_start, t_end)),
-                "kappa": self._sample_float(shift_spec["kappa"], rng, low_clip=1e-6),
-            }
-            return t_start, t_end, params
-
-        if kind in {"plateau", "convex_plateau", "concave_plateau"}:
-            plateau_spec = cast(PlateauLocalSpec, spec)
-            t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=6)
-            positive_p = float(plateau_spec.get("positive_p", 0.5))
-            sign = 1.0 if kind == "convex_plateau" else -1.0 if kind == "concave_plateau" else (1.0 if rng.random() < positive_p else -1.0)
-            params: PlateauEventParams = {
-                "amplitude": self._sample_float(plateau_spec["amplitude"], rng),
-                "sign": sign,
-            }
-            return t_start, t_end, params
-
-        if kind in self._ASYMMETRIC_TYPES:
-            asymmetric_spec = cast(AsymmetricLocalSpec, spec)
-            t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=8)
-            peak = int(rng.integers(t_start + 1, t_end))
-            rapid = self._sample_float(asymmetric_spec["rapid_tau"], rng, low_clip=1e-6)
-            slow = self._sample_float(asymmetric_spec["slow_tau"], rng, low_clip=1e-6)
-            rise_tau = rapid if "rapid_rise" in kind or "slow_decline_rapid_rise" in kind else slow
-            fall_tau = rapid if "rapid_decline" in kind or "slow_rise_rapid_decline" in kind else slow
-            sign = -1.0 if kind in {"rapid_decline_slow_rise", "slow_decline_rapid_rise"} else 1.0
-            params: AsymmetricEventParams = {
-                "amplitude": self._sample_float(asymmetric_spec["amplitude"], rng),
-                "peak": peak,
-                "rise_tau": rise_tau,
-                "fall_tau": fall_tau,
-                "sign": sign,
-            }
-            return t_start, t_end, params
-
-        if kind == "shake":
-            shake_spec = cast(ShakeLocalSpec, spec)
-            t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=10)
-            params: ShakeEventParams = {
-                "amplitude": self._sample_float(shake_spec["amplitude"], rng),
-                "freq": self._sample_float(shake_spec["frequency"], rng),
-                "phase": self._sample_float(shake_spec["phase"], rng),
-            }
-            return t_start, t_end, params
-
-        default_spike_spec = cast(SpikeLocalSpec, spec)
-        t_start, t_end = self._sample_window(n=n, rng=rng, spec=spec, min_len=5)
-        return t_start, t_end, self._sample_spike_params(spec=default_spike_spec, t_start=t_start, t_end=t_end, rng=rng)
+    def _handler_for_kind(self, kind: str) -> LocalAnomalyHandler:
+        try:
+            return self._handlers[kind]
+        except KeyError as exc:
+            raise ValueError(f"No local anomaly handler registered for kind: {kind}") from exc
 
     def _eligible_type_weights(self) -> dict[str, float]:
         local_cfg = self._local_config()
         weights: dict[str, float] = {}
         for kind, spec in local_cfg.per_type.items():
             weight = float(local_cfg.type_weights.get(kind, 0.0))
+            if spec.get("enabled", True) and weight > 0.0 and kind not in self._handlers:
+                raise ValueError(f"No local anomaly handler registered for enabled kind: {kind}")
             if spec.get("enabled", True) and weight > 0.0:
                 weights[kind] = weight
         return weights
@@ -375,7 +769,9 @@ class LocalAnomalyInjector:
 
         rise_mask = idx < rise_end
         if np.any(rise_mask):
-            delta[rise_mask] = amplitude * (idx[rise_mask] - t_start + 1) / max(1, rise_end - t_start)
+            delta[rise_mask] = (
+                amplitude * (idx[rise_mask] - t_start + 1) / max(1, rise_end - t_start)
+            )
 
         plateau_mask = (idx >= rise_end) & (idx < fall_start)
         if np.any(plateau_mask):
@@ -403,119 +799,26 @@ class LocalAnomalyInjector:
         delta = np.zeros(idx.size, dtype=float)
         rise_mask = idx <= peak
         if np.any(rise_mask):
-            delta[rise_mask] = amplitude * (1.0 - np.exp(-(idx[rise_mask] - t_start) / max(rise_tau, 1e-6)))
+            delta[rise_mask] = amplitude * (
+                1.0 - np.exp(-(idx[rise_mask] - t_start) / max(rise_tau, 1e-6))
+            )
         fall_mask = idx > peak
         if np.any(fall_mask):
             delta[fall_mask] = amplitude * np.exp(-(idx[fall_mask] - peak) / max(fall_tau, 1e-6))
         return sign * delta
 
-    def _render_template(self, kind: str, n: int, t_start: int, t_end: int, params: LocalEventParams) -> np.ndarray:
-        delta = np.zeros(n, dtype=float)
-        idx = np.arange(max(0, t_start), min(n, t_end))
-        rel = np.arange(idx.size)
-
-        if kind in self._SINGLE_SPIKE_TYPES:
-            spike_params = cast(SpikeEventParams, params)
-            sign = 1.0 if kind == "upward_spike" else -1.0
-            delta[idx] = self._render_triangular_spike(
-                idx=idx,
-                center=int(spike_params["center"]),
-                half_width=int(spike_params["half_width"]),
-                amplitude=float(spike_params["amplitude"]),
-                sign=sign,
-            )
-            return delta
-
-        if kind in self._BURST_SPIKE_TYPES:
-            burst_params = cast(BurstSpikeEventParams, params)
-            sign = 1.0 if kind == "continuous_upward_spikes" else -1.0
-            spike_count = int(burst_params["spike_count"])
-            stride = int(burst_params["stride"])
-            t0 = int(burst_params["t0"])
-            amplitudes = [float(v) for v in burst_params["amplitudes"]]
-            widths = [int(v) for v in burst_params["widths"]]
-            for offset in range(spike_count):
-                delta[idx] += self._render_triangular_spike(
-                    idx=idx,
-                    center=t0 + offset * stride,
-                    half_width=widths[offset],
-                    amplitude=amplitudes[offset],
-                    sign=sign,
-                )
-            return delta
-
-        if kind in self._WIDE_SPIKE_TYPES:
-            wide_params = cast(WideSpikeEventParams, params)
-            sign = 1.0 if kind == "wide_upward_spike" else -1.0
-            delta[idx] = self._render_wide_spike(
-                idx=idx,
-                t_start=t_start,
-                t_end=t_end,
-                amplitude=float(wide_params["amplitude"]),
-                rise_length=int(wide_params["rise_length"]),
-                fall_length=int(wide_params["fall_length"]),
-                sign=sign,
-            )
-            return delta
-
-        if kind == "outlier":
-            outlier_params = cast(OutlierEventParams, params)
-            t0 = int(outlier_params["t0"])
-            if 0 <= t0 < n:
-                delta[t0] = float(outlier_params["amplitude"])
-            return delta
-
-        if kind in self._SUDDEN_SHIFT_TYPES:
-            shift_params = cast(SuddenShiftEventParams, params)
-            sign = 1.0 if kind == "sudden_increase" else -1.0
-            t0 = int(shift_params["t0"])
-            kappa = float(shift_params["kappa"])
-            logits = kappa * (idx - t0)
-            delta[idx] = sign * float(shift_params["amplitude"]) * (1.0 / (1.0 + np.exp(-logits)))
-            return delta
-
-        if kind in {"plateau", "convex_plateau", "concave_plateau"}:
-            plateau_params = cast(PlateauEventParams, params)
-            phase = np.pi * rel / max(1, idx.size - 1)
-            delta[idx] = float(plateau_params["sign"]) * float(plateau_params["amplitude"]) * 0.5 * (1.0 - np.cos(phase))
-            return delta
-
-        if kind in self._ASYMMETRIC_TYPES:
-            asymmetric_params = cast(AsymmetricEventParams, params)
-            delta[idx] = self._render_asymmetric_transient(
-                idx=idx,
-                t_start=t_start,
-                peak=int(asymmetric_params["peak"]),
-                amplitude=float(asymmetric_params["amplitude"]),
-                rise_tau=float(asymmetric_params["rise_tau"]),
-                fall_tau=float(asymmetric_params["fall_tau"]),
-                sign=float(asymmetric_params["sign"]),
-            )
-            return delta
-
-        if kind in self._SPIKE_LEVEL_TYPES:
-            spike_level_params = cast(SpikeLevelEventParams, params)
-            spike_sign = 1.0 if "upward" in kind else -1.0
-            shift_sign = 1.0 if kind in {"increase_after_downward_spike", "increase_after_upward_spike"} else -1.0
-            spike = self._render_triangular_spike(
-                idx=np.arange(n),
-                center=int(spike_level_params["center"]),
-                half_width=int(spike_level_params["half_width"]),
-                amplitude=float(spike_level_params["amplitude"]),
-                sign=spike_sign,
-            )
-            shift = np.zeros(n, dtype=float)
-            shift_start = int(spike_level_params["shift_start"])
-            if shift_start < n:
-                shift[shift_start:] = shift_sign * float(spike_level_params["shift_magnitude"])
-            return spike + shift
-
-        shake_params = cast(ShakeEventParams, params)
-        freq = float(shake_params["freq"])
-        phase = float(shake_params["phase"])
-        window = np.sin(np.pi * rel / max(1, idx.size - 1)) ** 2
-        delta[idx] = float(shake_params["amplitude"]) * window * np.sin(2 * np.pi * freq * rel + phase)
-        return delta
+    def _render_template(
+        self, kind: str, n: int, t_start: int, t_end: int, params: LocalEventParams
+    ) -> np.ndarray:
+        handler = self._handler_for_kind(kind)
+        return handler.render(
+            injector=self,
+            kind=kind,
+            n=n,
+            t_start=t_start,
+            t_end=t_end,
+            params=params,
+        )
 
     def sample_events(
         self,
@@ -545,8 +848,12 @@ class LocalAnomalyInjector:
                 kind = weighted_choice(rng, type_weights)
                 node = int(rng.choice(nodes))
                 spec = local_cfg.per_type[kind]
-                t_start, t_end, params = self._sample_template_spec(kind=kind, n=n, rng=rng, spec=spec)
-                if not self._can_place(node=node, t_start=t_start, t_end=t_end, placements=placements, counts=counts):
+                t_start, t_end, params = self._sample_template_spec(
+                    kind=kind, n=n, rng=rng, spec=spec
+                )
+                if not self._can_place(
+                    node=node, t_start=t_start, t_end=t_end, placements=placements, counts=counts
+                ):
                     continue
                 endogenous_p = float(local_cfg.endogenous_p)
                 is_endogenous = bool(d > 1 and rng.random() < endogenous_p)
@@ -587,12 +894,15 @@ class LocalAnomalyInjector:
         realized: list[AnomalyEvent] = []
 
         for event in events:
+            if event.family != "local":
+                raise ValueError(f"LocalAnomalyInjector received non-local event: {event.family}")
+            local_params = cast(LocalEventParams, event.params)
             delta = self._render_template(
                 kind=event.anomaly_type,
                 n=n,
                 t_start=event.t_start,
                 t_end=event.t_end,
-                params=event.params,
+                params=local_params,
             )
             x_anom[:, event.node] += delta
             realized.append(event)
@@ -607,4 +917,6 @@ class LocalAnomalyInjector:
         causal_state=None,
     ) -> tuple[np.ndarray, list[AnomalyEvent]]:
         sampled = self.sample_events(n=x_normal.shape[0], d=x_normal.shape[1], rng=rng, graph=graph)
-        return self.apply_events(x_normal=x_normal, events=sampled, graph=graph, causal_state=causal_state)
+        return self.apply_events(
+            x_normal=x_normal, events=sampled, graph=graph, causal_state=causal_state
+        )

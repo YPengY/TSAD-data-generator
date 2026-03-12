@@ -11,8 +11,14 @@ from synthtsad import load_config_from_raw
         ({"anomaly_sample_ratio": 1.2}, "anomaly_sample_ratio"),
         ({"causal": {"edge_density": -0.1}}, "causal.edge_density"),
         ({"causal": {"alpha_i_min": 0.8, "alpha_i_max": 0.4}}, "causal.alpha_i_max"),
-        ({"anomaly": {"local": {"defaults": {"endogenous_p": -0.2}}}}, "anomaly.local.defaults.endogenous_p"),
-        ({"anomaly": {"local": {"defaults": {"unexpected": 1}}}}, "anomaly.local.defaults contains unsupported keys"),
+        (
+            {"anomaly": {"local": {"defaults": {"endogenous_p": -0.2}}}},
+            "anomaly.local.defaults.endogenous_p",
+        ),
+        (
+            {"anomaly": {"local": {"defaults": {"unexpected": 1}}}},
+            "anomaly.local.defaults contains unsupported keys",
+        ),
         ({"anomaly": {"seasonal": {"activation_p": 1.2}}}, "anomaly.seasonal.activation_p"),
         ({"num_features": {"min": 2, "max": 2}}, "config contains unsupported keys"),
         ({"multivariate_flag": True}, "config contains unsupported keys"),

@@ -1,9 +1,9 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import numpy as np
 
 from ..config import GeneratorConfig
-from ..interfaces import NoiseParams
+from ..interfaces import NoiseParams, NoiseWindow
 from ..utils import weighted_choice
 
 
@@ -11,7 +11,7 @@ def sample_noise_params(n: int, config: GeneratorConfig, rng: np.random.Generato
     noise_level = weighted_choice(rng, config.weights["noise_level"])
     sigma0 = float(config.stage1.noise_sigma[noise_level])
 
-    windows: list[dict[str, int | float]] = []
+    windows: list[NoiseWindow] = []
     burst_count = config.stage1.volatility_windows.sample(rng)
     vmin, vmax = config.stage1.volatility_multiplier
 

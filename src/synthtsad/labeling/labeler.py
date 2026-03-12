@@ -71,7 +71,9 @@ class LabelBuilder:
 
             affected_nodes = {int(v) for v in event.affected_nodes}
             affected_nodes.add(node)
-            affected_nodes.update(np.where(np.any(delta_mask[s:e, :], axis=0))[0].astype(int).tolist())
+            affected_nodes.update(
+                np.where(np.any(delta_mask[s:e, :], axis=0))[0].astype(int).tolist()
+            )
             affected = sorted(affected_nodes)
 
             if event.root_cause_node is not None:

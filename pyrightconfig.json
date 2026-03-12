@@ -1,0 +1,22 @@
+{
+  "include": [
+    "src/synthtsad"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    ".venv",
+    "apps/tsad_studio",
+    "outputs",
+    "outputs_smoke",
+    "scripts",
+    "tests"
+  ],
+  "extraPaths": [
+    "src"
+  ],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.10",
+  "typeCheckingMode": "standard",
+  "reportMissingTypeStubs": false
+}

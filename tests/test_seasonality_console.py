@@ -13,7 +13,11 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from synthtsad.components.seasonality import WAVELET_REGISTRY, render_seasonality, sample_seasonality_params
+from synthtsad.components.seasonality import (
+    WAVELET_REGISTRY,
+    render_seasonality,
+    sample_seasonality_params,
+)
 from synthtsad.config import load_config
 
 
@@ -76,16 +80,40 @@ def _build_preset_params(name: str) -> dict[str, Any]:
         return {
             "seasonality_type": "sine",
             "atoms": [
-                {"type": "sine", "period": 24.0, "frequency": 1.0 / 24.0, "amplitude": 1.0, "phase": 0.0},
+                {
+                    "type": "sine",
+                    "period": 24.0,
+                    "frequency": 1.0 / 24.0,
+                    "amplitude": 1.0,
+                    "phase": 0.0,
+                },
             ],
         }
     if name == "sine_multi":
         return {
             "seasonality_type": "sine",
             "atoms": [
-                {"type": "sine", "period": 24.0, "frequency": 1.0 / 24.0, "amplitude": 1.1, "phase": 0.0},
-                {"type": "sine", "period": 12.0, "frequency": 1.0 / 12.0, "amplitude": 0.6, "phase": 0.8},
-                {"type": "sine", "period": 48.0, "frequency": 1.0 / 48.0, "amplitude": 0.4, "phase": 1.4},
+                {
+                    "type": "sine",
+                    "period": 24.0,
+                    "frequency": 1.0 / 24.0,
+                    "amplitude": 1.1,
+                    "phase": 0.0,
+                },
+                {
+                    "type": "sine",
+                    "period": 12.0,
+                    "frequency": 1.0 / 12.0,
+                    "amplitude": 0.6,
+                    "phase": 0.8,
+                },
+                {
+                    "type": "sine",
+                    "period": 48.0,
+                    "frequency": 1.0 / 48.0,
+                    "amplitude": 0.4,
+                    "phase": 1.4,
+                },
             ],
         }
     if name == "wavelet_family_mix":
@@ -182,9 +210,15 @@ def _build_params_from_args(args: argparse.Namespace) -> dict[str, Any]:
             atoms.append(atom)
         return {"seasonality_type": seasonality_type, "atoms": atoms}
 
-    families = _expand_param(_parse_str_list(args.families), atoms_count, str(args.family), "--families")
-    scales = _expand_param(_parse_float_list(args.scales), atoms_count, float(args.scale), "--scales")
-    shifts = _expand_param(_parse_float_list(args.shifts), atoms_count, float(args.shift), "--shifts")
+    families = _expand_param(
+        _parse_str_list(args.families), atoms_count, str(args.family), "--families"
+    )
+    scales = _expand_param(
+        _parse_float_list(args.scales), atoms_count, float(args.scale), "--scales"
+    )
+    shifts = _expand_param(
+        _parse_float_list(args.shifts), atoms_count, float(args.shift), "--shifts"
+    )
     raw_theta: list[dict[str, float]] = []
     if args.theta_jsons.strip():
         raw_theta = _parse_theta_list(args.theta_jsons)
@@ -195,7 +229,9 @@ def _build_params_from_args(args: argparse.Namespace) -> dict[str, Any]:
     for i in range(atoms_count):
         family = str(families[i])
         if family not in WAVELET_REGISTRY:
-            raise ValueError(f"Unsupported wavelet family: {family}; supported={sorted(WAVELET_REGISTRY)}")
+            raise ValueError(
+                f"Unsupported wavelet family: {family}; supported={sorted(WAVELET_REGISTRY)}"
+            )
         period = float(periods[i])
         atom = {
             "type": "wavelet",
@@ -274,9 +310,15 @@ def main() -> None:
         description="Seasonality-only debugging tool. Generate seasonality values from custom parameters.",
     )
     parser.add_argument("--n", type=int, default=128, help="Series length")
-    parser.add_argument("--seed", type=int, default=42, help="Global seed (used for random sampling)")
-    parser.add_argument("--head", type=int, default=None, help="Print first N points only; default prints all")
-    parser.add_argument("--plot-scatter", action="store_true", help="Save scatter plot of generated seasonality")
+    parser.add_argument(
+        "--seed", type=int, default=42, help="Global seed (used for random sampling)"
+    )
+    parser.add_argument(
+        "--head", type=int, default=None, help="Print first N points only; default prints all"
+    )
+    parser.add_argument(
+        "--plot-scatter", action="store_true", help="Save scatter plot of generated seasonality"
+    )
     parser.add_argument(
         "--plot-out",
         type=str,
@@ -286,15 +328,21 @@ def main() -> None:
     parser.add_argument("--show-plot", action="store_true", help="Display plotting window")
     parser.add_argument("--point-size", type=float, default=10.0, help="Scatter point size")
 
-    parser.add_argument("--params-json", type=str, default=None, help="Full seasonality params JSON string")
+    parser.add_argument(
+        "--params-json", type=str, default=None, help="Full seasonality params JSON string"
+    )
     parser.add_argument(
         "--params-file",
         type=str,
         default=None,
         help="Path to JSON file containing full seasonality params",
     )
-    parser.add_argument("--sample-random", action="store_true", help="Sample seasonality params from config")
-    parser.add_argument("--config", type=str, default=str(ROOT / "configs" / "default.json"), help="Config path")
+    parser.add_argument(
+        "--sample-random", action="store_true", help="Sample seasonality params from config"
+    )
+    parser.add_argument(
+        "--config", type=str, default=str(ROOT / "configs" / "default.json"), help="Config path"
+    )
     parser.add_argument(
         "--preset",
         choices=["none", "sine_single", "sine_multi", "wavelet_family_mix", "wavelet_scale_shift"],
@@ -309,15 +357,25 @@ def main() -> None:
         help="Manual mode seasonality type",
     )
     parser.add_argument("--atoms", type=int, default=1, help="Manual mode number of atoms")
-    parser.add_argument("--periods", type=str, default="24", help="Comma-separated periods, e.g. 24,48")
+    parser.add_argument(
+        "--periods", type=str, default="24", help="Comma-separated periods, e.g. 24,48"
+    )
     parser.add_argument("--amplitudes", type=str, default="1.0", help="Comma-separated amplitudes")
-    parser.add_argument("--phases", type=str, default="0.0", help="Comma-separated phases in radians")
+    parser.add_argument(
+        "--phases", type=str, default="0.0", help="Comma-separated phases in radians"
+    )
 
-    parser.add_argument("--family", type=str, default="morlet", help="Default wavelet family for manual mode")
+    parser.add_argument(
+        "--family", type=str, default="morlet", help="Default wavelet family for manual mode"
+    )
     parser.add_argument("--families", type=str, default="", help="Comma-separated wavelet families")
-    parser.add_argument("--scale", type=float, default=0.16, help="Default wavelet scale for manual mode")
+    parser.add_argument(
+        "--scale", type=float, default=0.16, help="Default wavelet scale for manual mode"
+    )
     parser.add_argument("--scales", type=str, default="", help="Comma-separated wavelet scales")
-    parser.add_argument("--shift", type=float, default=0.0, help="Default wavelet shift for manual mode")
+    parser.add_argument(
+        "--shift", type=float, default=0.0, help="Default wavelet shift for manual mode"
+    )
     parser.add_argument("--shifts", type=str, default="", help="Comma-separated wavelet shifts")
     parser.add_argument(
         "--theta-jsons",
@@ -346,7 +404,9 @@ def main() -> None:
             {
                 "length": int(seasonality.size),
                 "seasonality_type": str(params.get("seasonality_type", "unknown")),
-                "num_atoms": int(len(params.get("atoms", []))) if isinstance(params.get("atoms", []), list) else 0,
+                "num_atoms": int(len(params.get("atoms", [])))
+                if isinstance(params.get("atoms", []), list)
+                else 0,
                 "min": float(np.min(seasonality)),
                 "max": float(np.max(seasonality)),
                 "mean": float(np.mean(seasonality)),

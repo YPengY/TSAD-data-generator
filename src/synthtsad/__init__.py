@@ -1,4 +1,4 @@
-﻿"""Public package exports."""
+"""Public package exports."""
 
 from .config import GeneratorConfig, load_config, load_config_from_raw
 from .pipeline import SyntheticGeneratorPipeline

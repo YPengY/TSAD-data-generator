@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import json
@@ -18,7 +18,9 @@ from synthtsad.components.trend import render_trend, sample_trend_params
 from synthtsad.config import load_config
 
 
-def _load_trend_params(args: argparse.Namespace, n: int, rng: np.random.Generator) -> dict[str, Any]:
+def _load_trend_params(
+    args: argparse.Namespace, n: int, rng: np.random.Generator
+) -> dict[str, Any]:
     if args.trend_params_json:
         return json.loads(args.trend_params_json)
     if args.trend_params_file:
@@ -35,7 +37,9 @@ def _load_trend_params(args: argparse.Namespace, n: int, rng: np.random.Generato
     }
 
 
-def _load_seasonality_params(args: argparse.Namespace, n: int, rng: np.random.Generator) -> dict[str, Any]:
+def _load_seasonality_params(
+    args: argparse.Namespace, n: int, rng: np.random.Generator
+) -> dict[str, Any]:
     if args.seasonality_params_json:
         return json.loads(args.seasonality_params_json)
     if args.seasonality_params_file:
@@ -115,9 +119,13 @@ def main() -> None:
     )
     parser.add_argument("--n", type=int, default=256, help="Series length")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
-    parser.add_argument("--head", type=int, default=20, help="Print first N values for each component")
+    parser.add_argument(
+        "--head", type=int, default=20, help="Print first N values for each component"
+    )
 
-    parser.add_argument("--sample-random", action="store_true", help="Sample both components from config")
+    parser.add_argument(
+        "--sample-random", action="store_true", help="Sample both components from config"
+    )
     parser.add_argument(
         "--config",
         type=str,
@@ -125,8 +133,12 @@ def main() -> None:
         help="Config path used with --sample-random",
     )
 
-    parser.add_argument("--trend-params-json", type=str, default=None, help="JSON string for full trend params")
-    parser.add_argument("--trend-params-file", type=str, default=None, help="Path to JSON trend params file")
+    parser.add_argument(
+        "--trend-params-json", type=str, default=None, help="JSON string for full trend params"
+    )
+    parser.add_argument(
+        "--trend-params-file", type=str, default=None, help="Path to JSON trend params file"
+    )
 
     parser.add_argument(
         "--seasonality-params-json",
@@ -144,9 +156,15 @@ def main() -> None:
     # deterministic fallback params when not using random/json
     parser.add_argument("--k0", type=float, default=0.0, help="Fallback trend intercept")
     parser.add_argument("--k1", type=float, default=0.02, help="Fallback trend slope")
-    parser.add_argument("--default-period", type=float, default=24.0, help="Fallback seasonality period")
-    parser.add_argument("--default-amplitude", type=float, default=1.0, help="Fallback seasonality amplitude")
-    parser.add_argument("--default-phase", type=float, default=0.0, help="Fallback seasonality phase")
+    parser.add_argument(
+        "--default-period", type=float, default=24.0, help="Fallback seasonality period"
+    )
+    parser.add_argument(
+        "--default-amplitude", type=float, default=1.0, help="Fallback seasonality amplitude"
+    )
+    parser.add_argument(
+        "--default-phase", type=float, default=0.0, help="Fallback seasonality phase"
+    )
 
     parser.add_argument("--plot", action="store_true", help="Save a 3-panel visualization")
     parser.add_argument(

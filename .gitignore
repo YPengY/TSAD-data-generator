@@ -57,6 +57,24 @@ _cleanup_archive_*/
 # Local notes / references (not source code)
 timercd_translated.txt
 
+# Local environment files
+.env
+.env.*
+!.env.example
+.envrc
+.direnv/
+*.local
+
+# Frontend / JS tooling
+node_modules/
+.npm/
+.pnpm-store/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
 # OS / editor noise
 .DS_Store
 Thumbs.db

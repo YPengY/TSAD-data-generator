@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 from dataclasses import dataclass
@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Any, cast
 
 from .interfaces import LocalTypeSpec, SeasonalTypeSpec
-
 from .utils import (
     IntRange,
     ensure_int_range,
@@ -198,7 +197,16 @@ BASE_PERIOD_KEYS: set[str] = {"low", "high"}
 WAVELET_KEYS: set[str] = {"families", "scale", "shift", "contrastive"}
 CONTRASTIVE_KEYS: set[str] = {"ratio", "params"}
 NOISE_KEYS: set[str] = {"sigma", "volatility_windows", "volatility_multiplier"}
-CAUSAL_KEYS: set[str] = {"num_nodes", "edge_density", "max_lag", "a_i_bound", "bias_std", "b_ij_std", "alpha_i_min", "alpha_i_max"}
+CAUSAL_KEYS: set[str] = {
+    "num_nodes",
+    "edge_density",
+    "max_lag",
+    "a_i_bound",
+    "bias_std",
+    "b_ij_std",
+    "alpha_i_min",
+    "alpha_i_max",
+}
 DEBUG_KEYS: set[str] = {
     "enable_trend",
     "enable_seasonality",
@@ -213,12 +221,19 @@ ANOMALY_BUDGET_KEYS: set[str] = {"events_per_sample"}
 LOCAL_ANOMALY_KEYS: set[str] = {"budget", "defaults", "type_weights", "per_type"}
 SEASONAL_ANOMALY_KEYS: set[str] = {"activation_p", "budget", "defaults", "type_weights", "per_type"}
 LOCAL_DEFAULT_KEYS: set[str] = {"window_length", "endogenous_p", "target_component", "node_policy"}
-SEASONAL_DEFAULT_KEYS: set[str] = {"window_length", "endogenous_p", "target_component", "node_policy"}
+SEASONAL_DEFAULT_KEYS: set[str] = {
+    "window_length",
+    "endogenous_p",
+    "target_component",
+    "node_policy",
+}
 NODE_POLICY_KEYS: set[str] = {"mode", "allowed_nodes"}
 LOCAL_TARGET_COMPONENTS: tuple[str, ...] = ("observed",)
 SEASONAL_TARGET_COMPONENTS: tuple[str, ...] = ("seasonality",)
 LOCAL_NODE_POLICY_MODES: tuple[str, ...] = ("uniform",)
 SEASONAL_NODE_POLICY_MODES: tuple[str, ...] = ("seasonal_eligible", "uniform")
+
+
 def _default_local_type_weights() -> dict[str, float]:
     return {
         "upward_spike": 1.0,
@@ -701,7 +716,12 @@ def _ensure_generic_range(raw: Any, name: str) -> dict[str, int | float]:
         raise ValueError(f"{name} must have min/max")
     low = raw["min"]
     high = raw["max"]
-    if isinstance(low, bool) or isinstance(high, bool) or not isinstance(low, (int, float)) or not isinstance(high, (int, float)):
+    if (
+        isinstance(low, bool)
+        or isinstance(high, bool)
+        or not isinstance(low, (int, float))
+        or not isinstance(high, (int, float))
+    ):
         raise ValueError(f"{name} must use numeric min/max")
     if float(high) < float(low):
         raise ValueError(f"{name}.max must be >= {name}.min")
@@ -742,7 +762,10 @@ def _normalize_node_policy(raw: Any, name: str, allowed_modes: set[str]) -> dict
     if allowed_nodes is not None:
         if not isinstance(allowed_nodes, list):
             raise ValueError(f"{name}.allowed_nodes must be a list of ints or null")
-        cleaned_nodes = [ensure_non_negative_int(value, f"{name}.allowed_nodes[{index}]") for index, value in enumerate(allowed_nodes)]
+        cleaned_nodes = [
+            ensure_non_negative_int(value, f"{name}.allowed_nodes[{index}]")
+            for index, value in enumerate(allowed_nodes)
+        ]
     else:
         cleaned_nodes = None
     return {"mode": mode, "allowed_nodes": cleaned_nodes}
@@ -778,7 +801,11 @@ def _normalize_type_specs(
                 if not isinstance(value, list) or not value:
                     raise ValueError(f"{field_name} must be a non-empty list")
                 cleaned[key] = [str(item) for item in value]
-                invalid = [item for item in cleaned[key] if item not in {"sine", "square", "triangle", "wavelet"}]
+                invalid = [
+                    item
+                    for item in cleaned[key]
+                    if item not in {"sine", "square", "triangle", "wavelet"}
+                ]
                 if invalid:
                     raise ValueError(f"{field_name} contains unsupported values: {invalid}")
                 continue
@@ -834,25 +861,43 @@ def _normalize_anomaly_schema(raw: Any) -> dict[str, Any]:
 
     normalized = json.loads(json.dumps(_default_anomaly_config()))
     if "defaults" in raw:
-        defaults_raw = _ensure_allowed_keys(raw["defaults"], "anomaly.defaults", ANOMALY_PLACEMENT_KEYS)
+        defaults_raw = _ensure_allowed_keys(
+            raw["defaults"], "anomaly.defaults", ANOMALY_PLACEMENT_KEYS
+        )
         normalized["defaults"] = _deep_merge(normalized["defaults"], defaults_raw)
     if "local" in raw:
         local_raw = _ensure_allowed_keys(raw["local"], "anomaly.local", LOCAL_ANOMALY_KEYS)
         if "budget" in local_raw:
             _ensure_allowed_keys(local_raw["budget"], "anomaly.local.budget", ANOMALY_BUDGET_KEYS)
         if "defaults" in local_raw:
-            defaults_raw = _ensure_allowed_keys(local_raw["defaults"], "anomaly.local.defaults", LOCAL_DEFAULT_KEYS)
+            defaults_raw = _ensure_allowed_keys(
+                local_raw["defaults"], "anomaly.local.defaults", LOCAL_DEFAULT_KEYS
+            )
             if "node_policy" in defaults_raw:
-                _ensure_allowed_keys(defaults_raw["node_policy"], "anomaly.local.defaults.node_policy", NODE_POLICY_KEYS)
+                _ensure_allowed_keys(
+                    defaults_raw["node_policy"],
+                    "anomaly.local.defaults.node_policy",
+                    NODE_POLICY_KEYS,
+                )
         normalized["local"] = _deep_merge(normalized["local"], local_raw)
     if "seasonal" in raw:
-        seasonal_raw = _ensure_allowed_keys(raw["seasonal"], "anomaly.seasonal", SEASONAL_ANOMALY_KEYS)
+        seasonal_raw = _ensure_allowed_keys(
+            raw["seasonal"], "anomaly.seasonal", SEASONAL_ANOMALY_KEYS
+        )
         if "budget" in seasonal_raw:
-            _ensure_allowed_keys(seasonal_raw["budget"], "anomaly.seasonal.budget", ANOMALY_BUDGET_KEYS)
+            _ensure_allowed_keys(
+                seasonal_raw["budget"], "anomaly.seasonal.budget", ANOMALY_BUDGET_KEYS
+            )
         if "defaults" in seasonal_raw:
-            defaults_raw = _ensure_allowed_keys(seasonal_raw["defaults"], "anomaly.seasonal.defaults", SEASONAL_DEFAULT_KEYS)
+            defaults_raw = _ensure_allowed_keys(
+                seasonal_raw["defaults"], "anomaly.seasonal.defaults", SEASONAL_DEFAULT_KEYS
+            )
             if "node_policy" in defaults_raw:
-                _ensure_allowed_keys(defaults_raw["node_policy"], "anomaly.seasonal.defaults.node_policy", NODE_POLICY_KEYS)
+                _ensure_allowed_keys(
+                    defaults_raw["node_policy"],
+                    "anomaly.seasonal.defaults.node_policy",
+                    NODE_POLICY_KEYS,
+                )
         normalized["seasonal"] = _deep_merge(normalized["seasonal"], seasonal_raw)
     return normalized
 
@@ -864,8 +909,14 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
     _ensure_allowed_keys(raw["stage1"]["trend"], "stage1.trend", TREND_KEYS)
     _ensure_allowed_keys(raw["stage1"]["trend"]["arima"], "stage1.trend.arima", TREND_ARIMA_KEYS)
     _ensure_allowed_keys(raw["stage1"]["seasonality"], "stage1.seasonality", SEASONAL_KEYS)
-    _ensure_allowed_keys(raw["stage1"]["seasonality"]["base_period"], "stage1.seasonality.base_period", BASE_PERIOD_KEYS)
-    _ensure_allowed_keys(raw["stage1"]["seasonality"]["wavelet"], "stage1.seasonality.wavelet", WAVELET_KEYS)
+    _ensure_allowed_keys(
+        raw["stage1"]["seasonality"]["base_period"],
+        "stage1.seasonality.base_period",
+        BASE_PERIOD_KEYS,
+    )
+    _ensure_allowed_keys(
+        raw["stage1"]["seasonality"]["wavelet"], "stage1.seasonality.wavelet", WAVELET_KEYS
+    )
     _ensure_allowed_keys(
         raw["stage1"]["seasonality"]["wavelet"]["contrastive"],
         "stage1.seasonality.wavelet.contrastive",
@@ -917,10 +968,7 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
         float(season_raw["amplitude"]["max"]),
     )
     if seasonal_amplitude[0] < 0.0 or seasonal_amplitude[1] < seasonal_amplitude[0]:
-        raise ValueError(
-            "Invalid stage1.seasonality.amplitude range: "
-            f"{seasonal_amplitude}"
-        )
+        raise ValueError(f"Invalid stage1.seasonality.amplitude range: {seasonal_amplitude}")
 
     volatility_multiplier = (
         float(noise_raw["volatility_multiplier"]["min"]),
@@ -928,8 +976,7 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
     )
     if volatility_multiplier[0] < 0.0 or volatility_multiplier[1] < volatility_multiplier[0]:
         raise ValueError(
-            "Invalid stage1.noise.volatility_multiplier range: "
-            f"{volatility_multiplier}"
+            f"Invalid stage1.noise.volatility_multiplier range: {volatility_multiplier}"
         )
 
     noise_sigma = {str(k): float(v) for k, v in noise_raw["sigma"].items()}
@@ -937,20 +984,25 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
         raise ValueError("stage1.noise.sigma must not be empty")
     invalid_noise_sigma = {k: v for k, v in noise_sigma.items() if v < 0.0}
     if invalid_noise_sigma:
-        raise ValueError(
-            "stage1.noise.sigma values must be >= 0, got "
-            f"{invalid_noise_sigma}"
-        )
+        raise ValueError(f"stage1.noise.sigma values must be >= 0, got {invalid_noise_sigma}")
 
     stage1 = Stage1Config(
-        trend_change_points=ensure_int_range(trend_raw["change_points"], "stage1.trend.change_points"),
-        trend_slope_scale=ensure_non_negative_float(trend_raw["slope_scale"], "stage1.trend.slope_scale"),
+        trend_change_points=ensure_int_range(
+            trend_raw["change_points"], "stage1.trend.change_points"
+        ),
+        trend_slope_scale=ensure_non_negative_float(
+            trend_raw["slope_scale"], "stage1.trend.slope_scale"
+        ),
         arima_noise_scale=ensure_non_negative_float(
             trend_raw["arima_noise_scale"],
             "stage1.trend.arima_noise_scale",
         ),
-        arima_p_max=ensure_non_negative_int(trend_raw["arima"]["p_max"], "stage1.trend.arima.p_max"),
-        arima_q_max=ensure_non_negative_int(trend_raw["arima"]["q_max"], "stage1.trend.arima.q_max"),
+        arima_p_max=ensure_non_negative_int(
+            trend_raw["arima"]["p_max"], "stage1.trend.arima.p_max"
+        ),
+        arima_q_max=ensure_non_negative_int(
+            trend_raw["arima"]["q_max"], "stage1.trend.arima.q_max"
+        ),
         arima_d=ensure_int_range(trend_raw["arima"]["d"], "stage1.trend.arima.d"),
         arima_coef_bound=ensure_non_negative_float(
             trend_raw["arima"]["coef_bound"],
@@ -958,9 +1010,15 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
         ),
         seasonal_atoms=ensure_int_range(season_raw["atoms"], "stage1.seasonality.atoms"),
         seasonal_amplitude=seasonal_amplitude,
-        period_low=ensure_int_range(season_raw["base_period"]["low"], "stage1.seasonality.base_period.low"),
-        period_high=ensure_int_range(season_raw["base_period"]["high"], "stage1.seasonality.base_period.high"),
-        wavelet_family_weights=normalize_weights({str(k): float(v) for k, v in wavelet_raw["families"].items()}),
+        period_low=ensure_int_range(
+            season_raw["base_period"]["low"], "stage1.seasonality.base_period.low"
+        ),
+        period_high=ensure_int_range(
+            season_raw["base_period"]["high"], "stage1.seasonality.base_period.high"
+        ),
+        wavelet_family_weights=normalize_weights(
+            {str(k): float(v) for k, v in wavelet_raw["families"].items()}
+        ),
         wavelet_scale=wavelet_scale,
         wavelet_shift=wavelet_shift,
         wavelet_contrastive_ratio=wavelet_contrastive_ratio,
@@ -979,8 +1037,7 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
     alpha_i_max = ensure_probability(causal_raw["alpha_i_max"], "causal.alpha_i_max")
     if alpha_i_max < alpha_i_min:
         raise ValueError(
-            "causal.alpha_i_max must be >= causal.alpha_i_min, "
-            f"got ({alpha_i_min}, {alpha_i_max})"
+            f"causal.alpha_i_max must be >= causal.alpha_i_min, got ({alpha_i_min}, {alpha_i_max})"
         )
     causal = CausalConfig(
         num_nodes=ensure_int_range(causal_raw["num_nodes"], "causal.num_nodes"),
@@ -1000,7 +1057,9 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
 
     placement = AnomalyPlacementConfig(
         allow_overlap=bool(anomaly_defaults_raw["allow_overlap"]),
-        min_gap=ensure_non_negative_int(anomaly_defaults_raw["min_gap"], "anomaly.defaults.min_gap"),
+        min_gap=ensure_non_negative_int(
+            anomaly_defaults_raw["min_gap"], "anomaly.defaults.min_gap"
+        ),
         max_events_per_node=ensure_positive_int(
             anomaly_defaults_raw["max_events_per_node"],
             "anomaly.defaults.max_events_per_node",
@@ -1035,7 +1094,9 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
         target_component=local_target_component,
         node_policy=NodePolicyConfig(
             mode=str(local_node_policy_raw["mode"]),
-            allowed_nodes=tuple(local_node_policy_raw["allowed_nodes"]) if local_node_policy_raw["allowed_nodes"] is not None else None,
+            allowed_nodes=tuple(local_node_policy_raw["allowed_nodes"])
+            if local_node_policy_raw["allowed_nodes"] is not None
+            else None,
         ),
         type_weights=_ensure_non_negative_weight_map(
             local_raw["type_weights"],
@@ -1077,7 +1138,9 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
         target_component=seasonal_target_component,
         node_policy=NodePolicyConfig(
             mode=str(seasonal_node_policy_raw["mode"]),
-            allowed_nodes=tuple(seasonal_node_policy_raw["allowed_nodes"]) if seasonal_node_policy_raw["allowed_nodes"] is not None else None,
+            allowed_nodes=tuple(seasonal_node_policy_raw["allowed_nodes"])
+            if seasonal_node_policy_raw["allowed_nodes"] is not None
+            else None,
         ),
         type_weights=_ensure_non_negative_weight_map(
             seasonal_raw["type_weights"],
@@ -1115,7 +1178,9 @@ def _build_config(raw: dict[str, Any]) -> GeneratorConfig:
         raw=raw,
         num_samples=ensure_positive_int(raw["num_samples"], "num_samples"),
         sequence_length=ensure_int_range(raw["sequence_length"], "sequence_length"),
-        anomaly_sample_ratio=ensure_probability(raw["anomaly_sample_ratio"], "anomaly_sample_ratio"),
+        anomaly_sample_ratio=ensure_probability(
+            raw["anomaly_sample_ratio"], "anomaly_sample_ratio"
+        ),
         num_series=num_series,
         seed=int(raw["seed"]) if raw.get("seed") is not None else None,
         weights=weights,

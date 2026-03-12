@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 
@@ -79,8 +79,8 @@ class ARXSystem:
                 prev = z[t - 1, node] if t > 0 else 0.0
                 forcing = 0.0
                 for parent in self.graph.parents[node]:
-                    l = int(lag[parent, node])
-                    src_t = t - l
+                    lag_steps = int(lag[parent, node])
+                    src_t = t - lag_steps
                     if src_t >= 0:
                         forcing += float(gain[parent, node]) * x[src_t, parent]
 
@@ -99,8 +99,14 @@ class ARXSystem:
         n_steps: int,
         params: ARXParams,
     ) -> tuple[np.ndarray, ARXState]:
-        linear_params = dict(params)
-        linear_params["bias"] = [0.0 for _ in range(self.graph.num_nodes)]
+        linear_params: ARXParams = {
+            "a": list(params["a"]),
+            "alpha": list(params["alpha"]),
+            "bias": [0.0 for _ in range(self.graph.num_nodes)],
+            "lag": [list(row) for row in params["lag"]],
+            "gain": [list(row) for row in params["gain"]],
+            "max_lag": int(params["max_lag"]),
+        }
         return self.simulate_with_params(x_base=x_base, n_steps=n_steps, params=linear_params)
 
     def simulate_from_baseline(

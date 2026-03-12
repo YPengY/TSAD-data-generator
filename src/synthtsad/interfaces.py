@@ -73,11 +73,14 @@ class PeriodicAtom(SeasonalityAtomBase, total=False):
     cycle_shift: float
 
 
-class WaveletAtom(SeasonalityAtomBase, total=False):
+class WaveletAtomBase(SeasonalityAtomBase):
     family: str
     scale: float
     shift: float
     theta: dict[str, float]
+
+
+class WaveletAtom(WaveletAtomBase, total=False):
     contrastive_group: int
     contrastive_role: Literal["anchor", "paired"]
     contrastive_changed: str
@@ -86,13 +89,17 @@ class WaveletAtom(SeasonalityAtomBase, total=False):
 SeasonalityAtom: TypeAlias = PeriodicAtom | WaveletAtom
 
 
+AtomicSeasonalityType: TypeAlias = Literal["sine", "square", "triangle", "wavelet"]
+SeasonalityType: TypeAlias = Literal["none"] | AtomicSeasonalityType
+
+
 class NoneSeasonalityParams(TypedDict):
     seasonality_type: Literal["none"]
     atoms: list[SeasonalityAtom]
 
 
 class AtomicSeasonalityParams(TypedDict):
-    seasonality_type: Literal["sine", "square", "triangle", "wavelet"]
+    seasonality_type: AtomicSeasonalityType
     atoms: list[SeasonalityAtom]
 
 

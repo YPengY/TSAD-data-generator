@@ -1,7 +1,8 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+
+from typing import TypeGuard
 
 import numpy as np
-from typing import TypeGuard
 
 from ..config import GeneratorConfig
 from ..interfaces import ArimaTrendParams, LinearTrendParams, MultipleTrendParams, TrendParams
@@ -20,9 +21,11 @@ def _is_arima_trend_params(params: TrendParams) -> TypeGuard[ArimaTrendParams]:
     return params["trend_type"] == "arima"
 
 
-def _piecewise_linear(t: np.ndarray, k0: float, k1: float, cps: np.ndarray, deltas: np.ndarray) -> np.ndarray:
+def _piecewise_linear(
+    t: np.ndarray, k0: float, k1: float, cps: np.ndarray, deltas: np.ndarray
+) -> np.ndarray:
     values = k0 + k1 * t.astype(float)
-    for cp, delta in zip(cps, deltas):
+    for cp, delta in zip(cps, deltas, strict=True):
         values += delta * np.maximum(t - cp, 0)
     return values
 

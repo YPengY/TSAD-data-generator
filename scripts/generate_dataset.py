@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import json
@@ -73,14 +73,24 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("outputs"), help="Output directory")
     parser.add_argument("--num-samples", type=int, default=None, help="Override config.num_samples")
     parser.add_argument("--seed", type=int, default=None, help="Override config.seed")
-    parser.add_argument("--num-series", type=int, default=None, help="Override sample series count (fixed min=max)")
+    parser.add_argument(
+        "--num-series", type=int, default=None, help="Override sample series count (fixed min=max)"
+    )
     parser.add_argument("--disable-trend", action="store_true", help="Disable trend component")
-    parser.add_argument("--disable-seasonality", action="store_true", help="Disable seasonality component")
+    parser.add_argument(
+        "--disable-seasonality", action="store_true", help="Disable seasonality component"
+    )
     parser.add_argument("--disable-noise", action="store_true", help="Disable noise component")
     parser.add_argument("--disable-causal", action="store_true", help="Disable causal ARX stage")
-    parser.add_argument("--disable-local-anomaly", action="store_true", help="Disable local anomaly injector")
-    parser.add_argument("--disable-seasonal-anomaly", action="store_true", help="Disable seasonal anomaly injector")
-    parser.add_argument("--print-config", action="store_true", help="Print final merged config and exit")
+    parser.add_argument(
+        "--disable-local-anomaly", action="store_true", help="Disable local anomaly injector"
+    )
+    parser.add_argument(
+        "--disable-seasonal-anomaly", action="store_true", help="Disable seasonal anomaly injector"
+    )
+    parser.add_argument(
+        "--print-config", action="store_true", help="Print final merged config and exit"
+    )
     args = parser.parse_args()
 
     cfg = _cfg_from_overrides(

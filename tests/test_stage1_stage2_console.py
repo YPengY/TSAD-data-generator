@@ -87,7 +87,9 @@ def _plot_stage1_stage2(
     ax00, ax01 = axes[0]
     ax10, ax11 = axes[1]
 
-    _plot_dag(ax=ax00, graph_parents=graph_parents, topo_order=topo_order, selected_nodes=selected_nodes)
+    _plot_dag(
+        ax=ax00, graph_parents=graph_parents, topo_order=topo_order, selected_nodes=selected_nodes
+    )
 
     for node in selected_nodes:
         ax01.plot(t, stage1[:, node], linewidth=line_width, label=f"node {node}")
@@ -166,7 +168,9 @@ def _plot_dag(
         face = "#d95f02" if node in selected_nodes else "#1f77b4"
         circle = Circle((x, y), radius=0.04, facecolor=face, edgecolor="#222222", linewidth=1.2)
         ax.add_patch(circle)
-        ax.text(x, y, str(node), ha="center", va="center", fontsize=10, color="white", weight="bold")
+        ax.text(
+            x, y, str(node), ha="center", va="center", fontsize=10, color="white", weight="bold"
+        )
 
     edge_count = sum(len(parents) for parents in graph_parents)
     ax.set_title(f"DAG: parent -> child (edges={edge_count})")
@@ -199,8 +203,12 @@ def main() -> None:
     parser.add_argument("--n", type=int, default=240, help="Fixed sequence length")
     parser.add_argument("--num-series", type=int, default=4, help="Fixed number of series/nodes")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
-    parser.add_argument("--head", type=int, default=12, help="Print first N timesteps for selected nodes")
-    parser.add_argument("--max-plot-nodes", type=int, default=4, help="Maximum number of nodes shown in line plots")
+    parser.add_argument(
+        "--head", type=int, default=12, help="Print first N timesteps for selected nodes"
+    )
+    parser.add_argument(
+        "--max-plot-nodes", type=int, default=4, help="Maximum number of nodes shown in line plots"
+    )
     parser.add_argument("--line-width", type=float, default=1.5, help="Plot line width")
     parser.add_argument("--plot", action="store_true", help="Save a visualization panel")
     parser.add_argument(
@@ -231,7 +239,9 @@ def main() -> None:
     graph = CausalGraphSampler(cfg).sample_graph(num_nodes=d, rng=rng)
     arx = ARXSystem(cfg, graph)
     stage2_params = arx.sample_params(rng)
-    x_stage2, causal_state = arx.simulate_with_params(x_base=x_stage1, n_steps=n, params=stage2_params)
+    x_stage2, causal_state = arx.simulate_with_params(
+        x_base=x_stage1, n_steps=n, params=stage2_params
+    )
     delta = x_stage2 - x_stage1
 
     selected_nodes = list(range(min(d, max(1, int(args.max_plot_nodes)))))

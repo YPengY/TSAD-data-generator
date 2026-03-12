@@ -126,7 +126,11 @@ def _load_noise_params(
             raise ValueError("Config is required for --sample-random")
         return sample_noise_params(n=n, config=cfg, rng=rng)
 
-    stochastic_seed = int(args.noise_stochastic_seed) if args.noise_stochastic_seed is not None else int(args.seed + 1)
+    stochastic_seed = (
+        int(args.noise_stochastic_seed)
+        if args.noise_stochastic_seed is not None
+        else int(args.seed + 1)
+    )
     return {
         "noise_level": "manual",
         "sigma0": float(args.noise_sigma0),
@@ -173,7 +177,9 @@ def _plot_components(
     ax10.grid(alpha=0.3)
 
     ax11 = axes[1, 1]
-    ax11.plot(t, trend, color="#1f77b4", linewidth=max(1.0, line_width * 0.9), alpha=0.9, label="trend")
+    ax11.plot(
+        t, trend, color="#1f77b4", linewidth=max(1.0, line_width * 0.9), alpha=0.9, label="trend"
+    )
     ax11.plot(
         t,
         seasonality,
@@ -182,8 +188,12 @@ def _plot_components(
         alpha=0.9,
         label="seasonality",
     )
-    ax11.plot(t, noise, color="#ff7f0e", linewidth=max(1.0, line_width * 0.9), alpha=0.9, label="noise")
-    ax11.plot(t, combined, color="#111111", linewidth=max(1.2, line_width * 1.2), alpha=0.95, label="sum")
+    ax11.plot(
+        t, noise, color="#ff7f0e", linewidth=max(1.0, line_width * 0.9), alpha=0.9, label="noise"
+    )
+    ax11.plot(
+        t, combined, color="#111111", linewidth=max(1.2, line_width * 1.2), alpha=0.95, label="sum"
+    )
     ax11.set_title("All Components + Sum")
     ax11.set_xlabel("t")
     ax11.grid(alpha=0.3)
@@ -204,7 +214,9 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42, help="Random seed for parameter sampling")
     parser.add_argument("--head", type=int, default=20, help="Print first N points per component")
 
-    parser.add_argument("--sample-random", action="store_true", help="Sample all components from config")
+    parser.add_argument(
+        "--sample-random", action="store_true", help="Sample all components from config"
+    )
     parser.add_argument(
         "--config",
         type=str,
@@ -212,8 +224,12 @@ def main() -> None:
         help="Config path used with --sample-random",
     )
 
-    parser.add_argument("--trend-params-json", type=str, default=None, help="JSON string for full trend params")
-    parser.add_argument("--trend-params-file", type=str, default=None, help="Path to JSON trend params file")
+    parser.add_argument(
+        "--trend-params-json", type=str, default=None, help="JSON string for full trend params"
+    )
+    parser.add_argument(
+        "--trend-params-file", type=str, default=None, help="Path to JSON trend params file"
+    )
 
     parser.add_argument(
         "--seasonality-params-json",
@@ -228,14 +244,24 @@ def main() -> None:
         help="Path to JSON seasonality params file",
     )
 
-    parser.add_argument("--noise-params-json", type=str, default=None, help="JSON string for full noise params")
-    parser.add_argument("--noise-params-file", type=str, default=None, help="Path to JSON noise params file")
+    parser.add_argument(
+        "--noise-params-json", type=str, default=None, help="JSON string for full noise params"
+    )
+    parser.add_argument(
+        "--noise-params-file", type=str, default=None, help="Path to JSON noise params file"
+    )
 
     parser.add_argument("--k0", type=float, default=0.0, help="Fallback trend intercept")
     parser.add_argument("--k1", type=float, default=0.02, help="Fallback trend slope")
-    parser.add_argument("--default-period", type=float, default=24.0, help="Fallback seasonality period")
-    parser.add_argument("--default-amplitude", type=float, default=1.0, help="Fallback seasonality amplitude")
-    parser.add_argument("--default-phase", type=float, default=0.0, help="Fallback seasonality phase")
+    parser.add_argument(
+        "--default-period", type=float, default=24.0, help="Fallback seasonality period"
+    )
+    parser.add_argument(
+        "--default-amplitude", type=float, default=1.0, help="Fallback seasonality amplitude"
+    )
+    parser.add_argument(
+        "--default-phase", type=float, default=0.0, help="Fallback seasonality phase"
+    )
 
     parser.add_argument("--noise-sigma0", type=float, default=0.08, help="Fallback noise sigma0")
     parser.add_argument(

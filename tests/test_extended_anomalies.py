@@ -80,6 +80,33 @@ def test_extended_local_templates_render_expected_shapes() -> None:
     assert float(np.min(x_interaction[18:, 0])) < -0.5
 
 
+def test_local_handlers_cover_enabled_weighted_types() -> None:
+    cfg = _make_cfg()
+    injector = LocalAnomalyInjector(cfg)
+    active_kinds = {
+        kind
+        for kind, spec in cfg.anomaly.local.per_type.items()
+        if spec.get("enabled", True) and float(cfg.anomaly.local.type_weights.get(kind, 0.0)) > 0.0
+    }
+
+    for kind in active_kinds:
+        assert injector._handler_for_kind(kind) is not None
+
+
+def test_seasonal_handlers_cover_enabled_weighted_types() -> None:
+    cfg = _make_cfg()
+    injector = SeasonalAnomalyInjector(cfg)
+    active_kinds = {
+        kind
+        for kind, spec in cfg.anomaly.seasonal.per_type.items()
+        if spec.get("enabled", True)
+        and float(cfg.anomaly.seasonal.type_weights.get(kind, 0.0)) > 0.0
+    }
+
+    for kind in active_kinds:
+        assert injector._handler_for_kind(kind) is not None
+
+
 def test_seasonal_param_transform_is_windowed_without_causal() -> None:
     cfg = _make_cfg()
     injector = SeasonalAnomalyInjector(cfg)

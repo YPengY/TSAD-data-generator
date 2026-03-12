@@ -31,7 +31,6 @@ from synthtsad.interfaces import GenerationMetadata, LabelPayload, Stage1NodePar
 from synthtsad.labeling.labeler import LabelBuilder
 from synthtsad.pipeline import SyntheticGeneratorPipeline
 
-
 CONFIG_PATH = REPO_ROOT / "configs" / "default.json"
 
 SECTION_LABELS = {
@@ -159,7 +158,6 @@ FIELD_LABELS = {
     "frequency": "Frequency",
     "positive_p": "Positive Sign Probability",
     "min_abs_amplitude": "Minimum Absolute Amplitude",
-    "scale": "Scale Range",
     "factor": "Scaling Factor",
     "delta_phase": "Phase Shift",
     "amplitude_scale": "Amplitude Scale",
@@ -511,6 +509,7 @@ FIELD_DESCRIPTIONS_ZH = {
     "enable_seasonal_anomaly": "是否启用季节异常采样和注入。",
 }
 
+
 def _build_select_options() -> dict[str, list[str]]:
     return {
         "anomaly.local.defaults.target_component": list(LOCAL_TARGET_COMPONENTS),
@@ -532,8 +531,11 @@ def _build_multi_select_options(defaults: dict[str, Any]) -> dict[str, list[str]
         for kind, spec in per_type.items():
             applies_to = spec.get("applies_to")
             if isinstance(applies_to, list) and applies_to:
-                options[f"anomaly.{family}.per_type.{kind}.applies_to"] = [str(value) for value in applies_to]
+                options[f"anomaly.{family}.per_type.{kind}.applies_to"] = [
+                    str(value) for value in applies_to
+                ]
     return options
+
 
 RANGE_BOUNDS: dict[str, tuple[float, float, str]] = {
     "sequence_length": (32, 2048, "int"),
@@ -601,7 +603,9 @@ def _deep_copy_jsonable(value: Any) -> Any:
 def _merge_import_payload(default_node: Any, imported_node: Any) -> Any:
     if isinstance(default_node, dict):
         if not isinstance(imported_node, dict):
-            if set(default_node.keys()) == {"min", "max"} and isinstance(imported_node, (int, float)):
+            if set(default_node.keys()) == {"min", "max"} and isinstance(
+                imported_node, (int, float)
+            ):
                 return {"min": imported_node, "max": imported_node}
             return imported_node
 
@@ -639,8 +643,18 @@ def _describe_path(path: str, locale: str = "en") -> str:
     if path in section_descriptions:
         return section_descriptions[path]
     leaf = path.split(".")[-1]
-    if path.startswith("weights.") and leaf not in {"weights", "seasonality_type", "trend_type", "frequency_regime", "noise_level"}:
-        return "This weight controls how often the option is sampled." if locale == "en" else "这个权重决定对应选项被采样到的频率。"
+    if path.startswith("weights.") and leaf not in {
+        "weights",
+        "seasonality_type",
+        "trend_type",
+        "frequency_regime",
+        "noise_level",
+    }:
+        return (
+            "This weight controls how often the option is sampled."
+            if locale == "en"
+            else "这个权重决定对应选项被采样到的频率。"
+        )
     if leaf in field_descriptions:
         return field_descriptions[leaf]
     return "Configure this parameter." if locale == "en" else "设置该参数。"
@@ -648,7 +662,9 @@ def _describe_path(path: str, locale: str = "en") -> str:
 
 def _build_locale_payload(defaults: dict[str, Any], locale: str) -> dict[str, Any]:
     path_labels = {path: _pretty_label(path, locale=locale) for path in _collect_paths(defaults)}
-    path_descriptions = {path: _describe_path(path, locale=locale) for path in _collect_paths(defaults)}
+    path_descriptions = {
+        path: _describe_path(path, locale=locale) for path in _collect_paths(defaults)
+    }
     path_labels["root"] = SECTION_LABELS_ZH["root"] if locale == "zh" else SECTION_LABELS["root"]
     path_descriptions["root"] = _describe_path("root", locale=locale)
     return {
@@ -751,7 +767,9 @@ def _randomize_from_defaults(rng: np.random.Generator) -> dict[str, Any]:
     raw["sequence_length"] = _sample_range("sequence_length", rng)
     raw["num_series"] = _sample_range("num_series", rng)
 
-    raw["weights"] = {key: _randomize_weight_dict(weights, rng) for key, weights in raw["weights"].items()}
+    raw["weights"] = {
+        key: _randomize_weight_dict(weights, rng) for key, weights in raw["weights"].items()
+    }
 
     trend = raw["stage1"]["trend"]
     trend["change_points"] = _sample_range("stage1.trend.change_points", rng)
@@ -806,7 +824,9 @@ def _randomize_from_defaults(rng: np.random.Generator) -> dict[str, Any]:
     anomaly = raw["anomaly"]
     anomaly["defaults"]["allow_overlap"] = bool(rng.random() < 0.25)
     anomaly["defaults"]["min_gap"] = _sample_scalar("anomaly.defaults.min_gap", rng)
-    anomaly["defaults"]["max_events_per_node"] = _sample_scalar("anomaly.defaults.max_events_per_node", rng)
+    anomaly["defaults"]["max_events_per_node"] = _sample_scalar(
+        "anomaly.defaults.max_events_per_node", rng
+    )
     _randomize_anomaly_family(
         anomaly["local"],
         budget_path="anomaly.local.budget.events_per_sample",
@@ -858,7 +878,9 @@ def _randomize_weight_dict(weights: dict[str, float], rng: np.random.Generator) 
     return {key: round(value / total, 4) for key, value in sampled.items()}
 
 
-def _randomize_scalar_dict(values: dict[str, float], low: float, high: float, rng: np.random.Generator) -> dict[str, float]:
+def _randomize_scalar_dict(
+    values: dict[str, float], low: float, high: float, rng: np.random.Generator
+) -> dict[str, float]:
     return {key: round(float(rng.uniform(low, high)), 4) for key in values}
 
 
@@ -888,7 +910,11 @@ def _randomize_anomaly_family(
         for key, value in list(spec.items()):
             if key == "enabled":
                 continue
-            if isinstance(value, dict) and set(value.keys()) == {"min", "max"} and not isinstance(value.get("min"), bool):
+            if (
+                isinstance(value, dict)
+                and set(value.keys()) == {"min", "max"}
+                and not isinstance(value.get("min"), bool)
+            ):
                 # Keep detailed numeric ranges stable; the high-level budget/default knobs already randomize aggressively.
                 continue
             if isinstance(value, dict):
@@ -946,27 +972,34 @@ def preview_sample(raw_config: dict[str, Any]) -> dict[str, Any]:
             event.root_cause_node = None
 
     pre_causal_local_events = [event for event in sampled_local_events if bool(event.is_endogenous)]
-    post_causal_local_events = [event for event in sampled_local_events if not bool(event.is_endogenous)]
+    post_causal_local_events = [
+        event for event in sampled_local_events if not bool(event.is_endogenous)
+    ]
 
     x_stage1_anom = x_stage1.copy()
     realized_events: list[AnomalyEvent] = []
     if pre_causal_local_events:
-        x_stage1_anom, local_events = local_injector.apply_events(x_normal=x_stage1_anom, events=pre_causal_local_events)
+        x_stage1_anom, local_events = local_injector.apply_events(
+            x_normal=x_stage1_anom, events=pre_causal_local_events
+        )
         realized_events.extend(local_events)
     pre_causal_local_delta = x_stage1_anom - x_stage1
 
     if cfg.debug.enable_causal:
-        x_stage2_normal, causal_state = arx.simulate_with_params(x_base=x_stage1, n_steps=n, params=arx_params)
+        x_stage2_normal, causal_state = arx.simulate_with_params(
+            x_base=x_stage1, n_steps=n, params=arx_params
+        )
         x_observed, _ = arx.simulate_with_params(x_base=x_stage1_anom, n_steps=n, params=arx_params)
     else:
         x_stage2_normal = x_stage1.copy()
         x_observed = x_stage1_anom.copy()
         causal_state = pipeline._disabled_causal_state(n=n, d=d)
-    x_after_causal = x_observed.copy()
 
     x_before_post_local = x_observed.copy()
     if post_causal_local_events:
-        x_observed, local_events = local_injector.apply_events(x_normal=x_observed, events=post_causal_local_events)
+        x_observed, local_events = local_injector.apply_events(
+            x_normal=x_observed, events=post_causal_local_events
+        )
         realized_events.extend(local_events)
     post_causal_local_delta = x_observed - x_before_post_local
 
@@ -1007,15 +1040,45 @@ def preview_sample(raw_config: dict[str, Any]) -> dict[str, Any]:
     }
     series_catalog = [
         {"id": "observed", "label": "Final Observed", "group": "Final", "kind": "signal"},
-        {"id": "final_anomaly_delta", "label": "Observed - Stage2 Normal", "group": "Final", "kind": "delta"},
+        {
+            "id": "final_anomaly_delta",
+            "label": "Observed - Stage2 Normal",
+            "group": "Final",
+            "kind": "delta",
+        },
         {"id": "stage2_normal", "label": "Stage2 Normal", "group": "Causal", "kind": "signal"},
-        {"id": "stage2_causal_effect", "label": "Stage2 Normal - Stage1 Baseline", "group": "Causal", "kind": "delta"},
-        {"id": "stage3_pre_causal_local_delta", "label": "Pre-Causal Local Delta", "group": "Local", "kind": "delta"},
-        {"id": "stage3_post_causal_local_delta", "label": "Post-Causal Local Delta", "group": "Local", "kind": "delta"},
-        {"id": "stage3_seasonal_delta", "label": "Seasonal Delta", "group": "Seasonal", "kind": "delta"},
+        {
+            "id": "stage2_causal_effect",
+            "label": "Stage2 Normal - Stage1 Baseline",
+            "group": "Causal",
+            "kind": "delta",
+        },
+        {
+            "id": "stage3_pre_causal_local_delta",
+            "label": "Pre-Causal Local Delta",
+            "group": "Local",
+            "kind": "delta",
+        },
+        {
+            "id": "stage3_post_causal_local_delta",
+            "label": "Post-Causal Local Delta",
+            "group": "Local",
+            "kind": "delta",
+        },
+        {
+            "id": "stage3_seasonal_delta",
+            "label": "Seasonal Delta",
+            "group": "Seasonal",
+            "kind": "delta",
+        },
         {"id": "stage1_baseline", "label": "Stage1 Baseline", "group": "Stage1", "kind": "signal"},
         {"id": "stage1_trend", "label": "Stage1 Trend", "group": "Stage1", "kind": "component"},
-        {"id": "stage1_seasonality", "label": "Stage1 Seasonality", "group": "Stage1", "kind": "component"},
+        {
+            "id": "stage1_seasonality",
+            "label": "Stage1 Seasonality",
+            "group": "Stage1",
+            "kind": "component",
+        },
         {"id": "stage1_noise", "label": "Stage1 Noise", "group": "Stage1", "kind": "component"},
     ]
     series_payload = {
@@ -1052,8 +1115,12 @@ def preview_sample(raw_config: dict[str, Any]) -> dict[str, Any]:
         "debug": {
             "series_stats": {key: _series_stats(value) for key, value in series_payload.items()},
             "stage_windows": {
-                "pre_causal_local_nonzero": int(np.count_nonzero(np.abs(pre_causal_local_delta) > 1e-8)),
-                "post_causal_local_nonzero": int(np.count_nonzero(np.abs(post_causal_local_delta) > 1e-8)),
+                "pre_causal_local_nonzero": int(
+                    np.count_nonzero(np.abs(pre_causal_local_delta) > 1e-8)
+                ),
+                "post_causal_local_nonzero": int(
+                    np.count_nonzero(np.abs(post_causal_local_delta) > 1e-8)
+                ),
                 "seasonal_nonzero": int(np.count_nonzero(np.abs(seasonal_delta) > 1e-8)),
             },
         },
@@ -1079,7 +1146,9 @@ def _series_stats(values: np.ndarray) -> dict[str, float]:
     }
 
 
-def _realize_stage1_preview(cfg, t: np.ndarray, stage1_params: list[Stage1NodeParams]) -> dict[str, np.ndarray]:
+def _realize_stage1_preview(
+    cfg, t: np.ndarray, stage1_params: list[Stage1NodeParams]
+) -> dict[str, np.ndarray]:
     n = t.size
     d = len(stage1_params)
     trend_all = np.zeros((n, d), dtype=float)
@@ -1088,13 +1157,21 @@ def _realize_stage1_preview(cfg, t: np.ndarray, stage1_params: list[Stage1NodePa
     x_base = np.zeros((n, d), dtype=float)
     for spec in stage1_params:
         node = int(spec["node"])
-        trend = render_trend(t=t, params=spec["trend"]) if cfg.debug.enable_trend else np.zeros(n, dtype=float)
+        trend = (
+            render_trend(t=t, params=spec["trend"])
+            if cfg.debug.enable_trend
+            else np.zeros(n, dtype=float)
+        )
         season = (
             render_seasonality(t=t, params=spec["seasonality"])
             if cfg.debug.enable_seasonality
             else np.zeros(n, dtype=float)
         )
-        noise = render_noise(n=n, params=spec["noise"]) if cfg.debug.enable_noise else np.zeros(n, dtype=float)
+        noise = (
+            render_noise(n=n, params=spec["noise"])
+            if cfg.debug.enable_noise
+            else np.zeros(n, dtype=float)
+        )
         trend_all[:, node] = trend
         season_all[:, node] = season
         noise_all[:, node] = noise

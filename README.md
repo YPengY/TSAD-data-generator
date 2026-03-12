@@ -105,3 +105,29 @@ For each sample, two files are generated:
 ```
 
 Pytest ignores the `tests/*_console.py` debugging helpers and only runs the actual automated test files.
+
+## Quality Checks
+
+Install the dev toolchain through the existing setup script:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_env.ps1
+```
+
+Run the staged quality gate:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check_quality.ps1
+```
+
+Apply formatting and safe auto-fixes before re-running the gate:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check_quality.ps1 -Fix
+```
+
+Current scope:
+
+- `ruff format` for formatting
+- `ruff check` with `E/F/I/UP/B` and `E501` ignored for the initial rollout
+- `pyright` in `standard` mode over `src/synthtsad`

@@ -3,7 +3,13 @@ from __future__ import annotations
 import numpy as np
 
 from ..config import GeneratorConfig
-from ..interfaces import SeasonalParams, SeasonalityAtom, WaveletAtom
+from ..interfaces import (
+    PeriodicAtom,
+    SeasonalityAtom,
+    SeasonalityType,
+    SeasonalParams,
+    WaveletAtom,
+)
 from ..utils import weighted_choice
 
 
@@ -115,8 +121,8 @@ def _base_atom(
     amplitude: float,
     period: float,
     phase: float,
-) -> SeasonalityAtom:
-    atom: SeasonalityAtom = {
+) -> PeriodicAtom:
+    atom: PeriodicAtom = {
         "type": atom_type,
         "period": period,
         "frequency": 1.0 / period,
@@ -132,26 +138,83 @@ def _base_atom(
     return atom
 
 
+def _make_wavelet_atom(
+    amplitude: float,
+    period: float,
+    phase: float,
+    family: str,
+    scale: float,
+    shift: float,
+    theta: dict[str, float],
+) -> WaveletAtom:
+    return {
+        "type": "wavelet",
+        "period": period,
+        "frequency": 1.0 / period,
+        "amplitude": amplitude,
+        "phase": phase,
+        "modulation_depth": 0.0,
+        "modulation_frequency": 0.0,
+        "modulation_phase": 0.0,
+        "family": family,
+        "scale": scale,
+        "shift": shift,
+        "theta": theta,
+    }
+
+
 def _sample_wavelet_atom_base(config: GeneratorConfig, rng: np.random.Generator) -> WaveletAtom:
     amp_min, amp_max = config.stage1.seasonal_amplitude
     period = float(_sample_period(config, rng))
     family = weighted_choice(rng, config.stage1.wavelet_family_weights)
-    theta = _sample_wavelet_theta(family, rng)
-    atom = _base_atom(
-        atom_type="wavelet",
+    return _make_wavelet_atom(
         amplitude=float(rng.uniform(amp_min, amp_max)),
         period=period,
         phase=float(rng.uniform(0.0, 2.0 * np.pi)),
+        family=family,
+        scale=float(rng.uniform(*config.stage1.wavelet_scale)),
+        shift=float(rng.uniform(*config.stage1.wavelet_shift)),
+        theta=_sample_wavelet_theta(family, rng),
     )
-    atom.update(
-        {
-            "family": family,
-            "scale": float(rng.uniform(*config.stage1.wavelet_scale)),
-            "shift": float(rng.uniform(*config.stage1.wavelet_shift)),
-            "theta": theta,
-        }
-    )
-    return atom
+
+
+def _copy_wavelet_atom(atom: WaveletAtom) -> WaveletAtom:
+    copied: WaveletAtom = {
+        "type": atom["type"],
+        "period": float(atom["period"]),
+        "frequency": float(atom["frequency"]),
+        "amplitude": float(atom["amplitude"]),
+        "phase": float(atom["phase"]),
+        "modulation_depth": float(atom["modulation_depth"]),
+        "modulation_frequency": float(atom["modulation_frequency"]),
+        "modulation_phase": float(atom["modulation_phase"]),
+        "family": str(atom["family"]),
+        "scale": float(atom["scale"]),
+        "shift": float(atom["shift"]),
+        "theta": dict(atom["theta"]),
+    }
+    if "contrastive_group" in atom:
+        copied["contrastive_group"] = int(atom["contrastive_group"])
+    if "contrastive_role" in atom:
+        copied["contrastive_role"] = atom["contrastive_role"]
+    if "contrastive_changed" in atom:
+        copied["contrastive_changed"] = str(atom["contrastive_changed"])
+    return copied
+
+
+def _sample_seasonality_type(config: GeneratorConfig, rng: np.random.Generator) -> SeasonalityType:
+    season_type = weighted_choice(rng, config.weights["seasonality_type"])
+    if season_type == "none":
+        return "none"
+    if season_type == "sine":
+        return "sine"
+    if season_type == "square":
+        return "square"
+    if season_type == "triangle":
+        return "triangle"
+    if season_type == "wavelet":
+        return "wavelet"
+    raise ValueError(f"Unsupported seasonality type: {season_type}")
 
 
 def _sample_contrastive_variant(
@@ -159,11 +222,11 @@ def _sample_contrastive_variant(
     config: GeneratorConfig,
     rng: np.random.Generator,
 ) -> tuple[WaveletAtom, str]:
-    variant = dict(anchor)
+    variant = _copy_wavelet_atom(anchor)
     changed = str(rng.choice(config.stage1.wavelet_contrastive_params))
 
     if changed == "family":
-        source_family = str(anchor["family"])
+        source_family = anchor["family"]
         candidates = [f for f in config.stage1.wavelet_family_weights if f != source_family]
         if not candidates:
             changed = "scale"
@@ -199,9 +262,11 @@ def _sample_contrastive_variant(
     return variant, changed
 
 
-def sample_seasonality_params(n: int, config: GeneratorConfig, rng: np.random.Generator) -> SeasonalParams:
+def sample_seasonality_params(
+    n: int, config: GeneratorConfig, rng: np.random.Generator
+) -> SeasonalParams:
     _ = n
-    season_type = weighted_choice(rng, config.weights["seasonality_type"])
+    season_type = _sample_seasonality_type(config=config, rng=rng)
     if season_type == "none":
         return {"seasonality_type": "none", "atoms": []}
 

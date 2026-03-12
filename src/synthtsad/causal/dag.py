@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 
@@ -24,7 +24,9 @@ class CausalGraphSampler:
     def sample_graph(self, num_nodes: int, rng: np.random.Generator) -> CausalGraph:
         if num_nodes <= 1:
             adjacency = np.zeros((num_nodes, num_nodes), dtype=np.int8)
-            return CausalGraph(num_nodes=num_nodes, adjacency=adjacency, topo_order=[0], parents=[[]])
+            return CausalGraph(
+                num_nodes=num_nodes, adjacency=adjacency, topo_order=[0], parents=[[]]
+            )
 
         p = float(self.config.causal.edge_density)
         order = list(rng.permutation(num_nodes).astype(int))
@@ -38,4 +40,6 @@ class CausalGraphSampler:
                     adjacency[parent, child] = 1
 
         parents = [np.where(adjacency[:, i] == 1)[0].astype(int).tolist() for i in range(num_nodes)]
-        return CausalGraph(num_nodes=num_nodes, adjacency=adjacency, topo_order=order, parents=parents)
+        return CausalGraph(
+            num_nodes=num_nodes, adjacency=adjacency, topo_order=order, parents=parents
+        )

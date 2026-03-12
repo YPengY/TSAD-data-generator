@@ -12,7 +12,6 @@ from urllib.parse import urlparse
 
 from studio_core import get_bootstrap_payload, import_config_text, preview_sample, randomize_config
 
-
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
@@ -98,7 +97,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="TSAD Studio interactive UI")
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind")
     parser.add_argument("--port", type=int, default=8765, help="Port to bind")
-    parser.add_argument("--open-browser", action="store_true", help="Open the browser after startup")
+    parser.add_argument(
+        "--open-browser", action="store_true", help="Open the browser after startup"
+    )
     args = parser.parse_args()
 
     server = make_server(args.host, int(args.port))

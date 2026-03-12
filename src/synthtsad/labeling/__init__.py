@@ -1,1 +1,1 @@
-﻿"""Subpackage."""
+"""Subpackage."""

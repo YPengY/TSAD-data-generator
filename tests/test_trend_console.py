@@ -144,9 +144,15 @@ def main() -> None:
         description="Trend-only debugging tool. Generate trend values from custom parameters.",
     )
     parser.add_argument("--n", type=int, default=128, help="Trend length")
-    parser.add_argument("--seed", type=int, default=42, help="Global seed (used for random sampling)")
-    parser.add_argument("--head", type=int, default=None, help="Print first N points only; default prints all")
-    parser.add_argument("--plot-scatter", action="store_true", help="Save scatter plot of generated trend")
+    parser.add_argument(
+        "--seed", type=int, default=42, help="Global seed (used for random sampling)"
+    )
+    parser.add_argument(
+        "--head", type=int, default=None, help="Print first N points only; default prints all"
+    )
+    parser.add_argument(
+        "--plot-scatter", action="store_true", help="Save scatter plot of generated trend"
+    )
     parser.add_argument(
         "--plot-out",
         type=str,
@@ -156,10 +162,21 @@ def main() -> None:
     parser.add_argument("--show-plot", action="store_true", help="Display plotting window")
     parser.add_argument("--point-size", type=float, default=10.0, help="Scatter point size")
 
-    parser.add_argument("--params-json", type=str, default=None, help="Full trend params JSON string")
-    parser.add_argument("--params-file", type=str, default=None, help="Path to JSON file containing full trend params")
-    parser.add_argument("--sample-random", action="store_true", help="Sample trend params from config")
-    parser.add_argument("--config", type=str, default=str(ROOT / "configs" / "default.json"), help="Config path")
+    parser.add_argument(
+        "--params-json", type=str, default=None, help="Full trend params JSON string"
+    )
+    parser.add_argument(
+        "--params-file",
+        type=str,
+        default=None,
+        help="Path to JSON file containing full trend params",
+    )
+    parser.add_argument(
+        "--sample-random", action="store_true", help="Sample trend params from config"
+    )
+    parser.add_argument(
+        "--config", type=str, default=str(ROOT / "configs" / "default.json"), help="Config path"
+    )
 
     parser.add_argument(
         "--trend-type",
@@ -170,8 +187,12 @@ def main() -> None:
 
     parser.add_argument("--k0", type=float, default=None, help="Linear/multiple intercept")
     parser.add_argument("--k1", type=float, default=None, help="Linear/multiple slope")
-    parser.add_argument("--change-points", type=str, default="", help="multiple mode, e.g. 20,50,80")
-    parser.add_argument("--slope-deltas", type=str, default="", help="multiple mode, e.g. 0.02,-0.01,0.03")
+    parser.add_argument(
+        "--change-points", type=str, default="", help="multiple mode, e.g. 20,50,80"
+    )
+    parser.add_argument(
+        "--slope-deltas", type=str, default="", help="multiple mode, e.g. 0.02,-0.01,0.03"
+    )
 
     parser.add_argument("--p", type=int, default=1, help="ARIMA p")
     parser.add_argument("--d", type=int, default=1, help="ARIMA d")
