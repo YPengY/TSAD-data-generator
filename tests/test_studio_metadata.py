@@ -37,6 +37,23 @@ def test_preview_metadata_uses_stage_scoped_structure() -> None:
     assert sorted(metadata["stage3"]["sampled_events"].keys()) == ["local", "seasonal"]
 
 
+def test_studio_bootstrap_payload_uses_descriptive_labels_and_hints() -> None:
+    payload = studio_core.get_bootstrap_payload()
+    ui = payload["ui"]
+
+    assert (
+        ui["locales"]["en"]["pathLabels"]["anomaly.local.per_type.upward_spike"] == "Upward Spike"
+    )
+    assert ui["locales"]["zh"]["pathLabels"]["anomaly.local.per_type.upward_spike"] == "上升尖峰"
+    assert (
+        ui["locales"]["en"]["pathDescriptions"]["anomaly.local.per_type.upward_spike"]
+        == "Per-type settings for Upward Spike."
+    )
+    assert ui["locales"]["en"]["pathDescriptions"]["stage1.trend.change_points"] == (
+        "How many slope changes a piecewise trend may contain."
+    )
+
+
 def test_preview_payload_matches_studio_frontend_contract() -> None:
     payload = studio_core.import_config_text(
         json.dumps(
@@ -98,3 +115,6 @@ def test_studio_script_consumes_structured_metadata_and_label_summary() -> None:
     assert '"metadata.stagesTitle": "Structured Metadata"' in script
     assert '"metadata.field.localSampled": "Local sampled"' in script
     assert '"import.note": "Runtime and Studio import both accept only the formal schema.' in script
+    assert "title.textContent = formatTokenLabel(event.anomaly_type);" in script
+    assert "function describeCurrentValue(path)" in script
+    assert "Configure this parameter." not in script

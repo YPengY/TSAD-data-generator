@@ -97,6 +97,43 @@ class SyntheticGeneratorPipeline:
 
         return x_base
 
+    @staticmethod
+    def _affected_nodes_from_response(response: np.ndarray, fallback_node: int) -> list[int]:
+        affected_nodes = np.where(np.any(np.abs(response) > 1e-8, axis=0))[0].astype(int).tolist()
+        return affected_nodes or [int(fallback_node)]
+
+    def _annotate_endogenous_local_events(
+        self,
+        *,
+        n: int,
+        d: int,
+        local_injector: LocalAnomalyInjector,
+        events: list[AnomalyEvent],
+        arx: ARXSystem,
+        arx_params: ARXParams,
+    ) -> None:
+        for event in events:
+            if not bool(event.is_endogenous):
+                continue
+            node = int(event.node)
+            if node < 0 or node >= d:
+                continue
+            delta = local_injector.render_event_delta(n=n, event=event)
+            if not np.any(np.abs(delta) > 1e-8):
+                event.affected_nodes = [node]
+                continue
+            delta_matrix = np.zeros((n, d), dtype=float)
+            delta_matrix[:, node] = delta
+            response, _ = arx.simulate_linear_response(
+                x_base=delta_matrix,
+                n_steps=n,
+                params=arx_params,
+            )
+            event.affected_nodes = self._affected_nodes_from_response(
+                response=response,
+                fallback_node=node,
+            )
+
     def run(self, output_dir: Path) -> None:
         output_dir.mkdir(parents=True, exist_ok=True)
         writer = DatasetWriter(output_dir)
@@ -158,6 +195,17 @@ class SyntheticGeneratorPipeline:
             post_causal_local_events = [
                 e for e in sampled_local_events if not bool(e.is_endogenous)
             ]
+
+            if self.config.debug.enable_causal and pre_causal_local_events:
+                assert active_arx_params is not None
+                self._annotate_endogenous_local_events(
+                    n=n,
+                    d=d,
+                    local_injector=local_injector,
+                    events=pre_causal_local_events,
+                    arx=arx,
+                    arx_params=active_arx_params,
+                )
 
             x_base_anom = x_base.copy()
             realized_events: list[AnomalyEvent] = []

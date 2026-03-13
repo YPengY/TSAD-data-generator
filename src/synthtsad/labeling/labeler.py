@@ -12,7 +12,7 @@ from ..interfaces import EventSummary, LabelPayload, Stage3EventRecord
 
 
 class LabelBuilder:
-    """Build point/event/root-cause labels for generated samples."""
+    """Build labels from injected event regions and declared affected nodes."""
 
     def __init__(self, config: GeneratorConfig) -> None:
         self.config = config
@@ -51,10 +51,13 @@ class LabelBuilder:
     ) -> LabelPayload:
         _ = graph
         _ = causal_state
-        t, _ = x_anom.shape
-        delta = np.abs(x_anom - x_normal)
-        delta_mask = (delta > 1e-8).astype(np.uint8)
-        point_mask = delta_mask.copy()
+        if x_normal.shape != x_anom.shape:
+            raise ValueError(
+                f"x_normal and x_anom must share the same shape, got {x_normal.shape} and {x_anom.shape}"
+            )
+
+        t, d = x_anom.shape
+        point_mask = np.zeros((t, d), dtype=np.uint8)
 
         root_to_nodes: dict[int, set[int]] = defaultdict(set)
         event_records: list[Stage3EventRecord] = []
@@ -67,14 +70,13 @@ class LabelBuilder:
             node = int(event.node)
             if node < 0 or node >= point_mask.shape[1]:
                 continue
-            point_mask[s:e, node] = 1
 
-            affected_nodes = {int(v) for v in event.affected_nodes}
+            affected_nodes = {
+                int(v) for v in event.affected_nodes if 0 <= int(v) < point_mask.shape[1]
+            }
             affected_nodes.add(node)
-            affected_nodes.update(
-                np.where(np.any(delta_mask[s:e, :], axis=0))[0].astype(int).tolist()
-            )
             affected = sorted(affected_nodes)
+            point_mask[s:e, affected] = 1
 
             if event.root_cause_node is not None:
                 root = int(event.root_cause_node)

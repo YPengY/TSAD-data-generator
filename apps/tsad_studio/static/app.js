@@ -115,7 +115,7 @@ const LOCALE_TEXT = {
     "event.affected": "Affected",
     "event.rootCause": "Root cause",
     "event.params": "Params",
-    "validation.configure": "Configure this parameter.",
+    "validation.configure": "Parameter description unavailable.",
   },
   zh: {
     "brand.eyebrow": "TSAD Studio",
@@ -218,7 +218,7 @@ const LOCALE_TEXT = {
     "event.affected": "影响节点",
     "event.rootCause": "根因节点",
     "event.params": "参数",
-    "validation.configure": "请配置该参数。",
+    "validation.configure": "暂未提供参数说明。",
   },
 };
 
@@ -245,6 +245,55 @@ const TOKEN_LABELS = {
     baseline: "Baseline",
     endogenous: "Endogenous",
     exogenous: "Exogenous",
+    morlet: "Morlet",
+    ricker: "Ricker",
+    haar: "Haar",
+    gaus: "Gaussian",
+    mexh: "Mexican Hat",
+    shan: "Shannon",
+    uniform: "Uniform",
+    seasonal_eligible: "Seasonal Eligible",
+    upward_spike: "Upward Spike",
+    downward_spike: "Downward Spike",
+    continuous_upward_spikes: "Continuous Upward Spikes",
+    continuous_downward_spikes: "Continuous Downward Spikes",
+    wide_upward_spike: "Wide Upward Spike",
+    wide_downward_spike: "Wide Downward Spike",
+    outlier: "Outlier",
+    sudden_increase: "Sudden Increase",
+    sudden_decrease: "Sudden Decrease",
+    convex_plateau: "Convex Plateau",
+    concave_plateau: "Concave Plateau",
+    plateau: "Plateau",
+    rapid_rise_slow_decline: "Rapid Rise -> Slow Decline",
+    slow_rise_rapid_decline: "Slow Rise -> Rapid Decline",
+    rapid_decline_slow_rise: "Rapid Decline -> Slow Rise",
+    slow_decline_rapid_rise: "Slow Decline -> Rapid Rise",
+    decrease_after_upward_spike: "Decrease After Upward Spike",
+    increase_after_downward_spike: "Increase After Downward Spike",
+    increase_after_upward_spike: "Increase After Upward Spike",
+    decrease_after_downward_spike: "Decrease After Downward Spike",
+    shake: "Shake",
+    waveform_inversion: "Waveform Inversion",
+    amplitude_scaling: "Amplitude Scaling",
+    frequency_change: "Frequency Change",
+    phase_shift: "Phase Shift",
+    noise_injection: "Noise Injection",
+    waveform_change: "Waveform Change",
+    add_harmonic: "Add Harmonic",
+    remove_harmonic: "Remove Harmonic",
+    modify_harmonic_phase: "Modify Harmonic Phase",
+    modify_modulation_depth: "Modify Modulation Depth",
+    modify_modulation_frequency: "Modify Modulation Frequency",
+    modify_modulation_phase: "Modify Modulation Phase",
+    pulse_shift: "Pulse Shift",
+    pulse_width_modulation: "Pulse Width Modulation",
+    wavelet_family_change: "Wavelet Family Change",
+    wavelet_scale_change: "Wavelet Scale Change",
+    wavelet_shift_change: "Wavelet Shift Change",
+    wavelet_amplitude_change: "Wavelet Amplitude Change",
+    add_wavelet: "Add Wavelet",
+    remove_wavelet: "Remove Wavelet",
   },
   zh: {
     none: "无",
@@ -268,6 +317,55 @@ const TOKEN_LABELS = {
     baseline: "基线层",
     endogenous: "内生",
     exogenous: "外生",
+    morlet: "Morlet",
+    ricker: "Ricker",
+    haar: "Haar",
+    gaus: "高斯",
+    mexh: "墨西哥帽",
+    shan: "Shannon",
+    uniform: "均匀",
+    seasonal_eligible: "季节有效节点",
+    upward_spike: "上升尖峰",
+    downward_spike: "下降尖峰",
+    continuous_upward_spikes: "连续上升尖峰",
+    continuous_downward_spikes: "连续下降尖峰",
+    wide_upward_spike: "宽上升尖峰",
+    wide_downward_spike: "宽下降尖峰",
+    outlier: "异常点",
+    sudden_increase: "突增",
+    sudden_decrease: "突降",
+    convex_plateau: "凸平台",
+    concave_plateau: "凹平台",
+    plateau: "平台",
+    rapid_rise_slow_decline: "快升慢降",
+    slow_rise_rapid_decline: "慢升快降",
+    rapid_decline_slow_rise: "快降慢升",
+    slow_decline_rapid_rise: "慢降快升",
+    decrease_after_upward_spike: "上升尖峰后下降",
+    increase_after_downward_spike: "下降尖峰后上升",
+    increase_after_upward_spike: "上升尖峰后上升",
+    decrease_after_downward_spike: "下降尖峰后下降",
+    shake: "抖动",
+    waveform_inversion: "波形反转",
+    amplitude_scaling: "幅值缩放",
+    frequency_change: "频率变化",
+    phase_shift: "相位偏移",
+    noise_injection: "噪声注入",
+    waveform_change: "波形变换",
+    add_harmonic: "添加谐波",
+    remove_harmonic: "移除谐波",
+    modify_harmonic_phase: "修改谐波相位",
+    modify_modulation_depth: "修改调制深度",
+    modify_modulation_frequency: "修改调制频率",
+    modify_modulation_phase: "修改调制相位",
+    pulse_shift: "脉冲平移",
+    pulse_width_modulation: "脉宽调制",
+    wavelet_family_change: "小波族变化",
+    wavelet_scale_change: "小波尺度变化",
+    wavelet_shift_change: "小波平移变化",
+    wavelet_amplitude_change: "小波幅值变化",
+    add_wavelet: "添加小波",
+    remove_wavelet: "移除小波",
   },
 };
 
@@ -1042,7 +1140,7 @@ function renderMetadata() {
     titleBlock.className = "event-card-title";
 
     const title = document.createElement("strong");
-    title.textContent = formatCodeLabel(event.anomaly_type);
+    title.textContent = formatTokenLabel(event.anomaly_type);
     title.title = event.anomaly_type;
     titleBlock.appendChild(title);
 
@@ -1687,7 +1785,7 @@ function getLabel(path) {
 
 function getDescription(path) {
   const localeUi = getLocaleUi();
-  return localeUi.pathDescriptions[path] ?? t("validation.configure");
+  return localeUi.pathDescriptions[path] ?? describeCurrentValue(path);
 }
 
 function getLocaleUi() {
@@ -1695,6 +1793,47 @@ function getLocaleUi() {
     return { pathLabels: {}, pathDescriptions: {} };
   }
   return state.ui.locales?.[state.locale] ?? { pathLabels: state.ui.pathLabels ?? {}, pathDescriptions: state.ui.pathDescriptions ?? {} };
+}
+
+function describeCurrentValue(path) {
+  const label = getLabel(path);
+  if (!state.config) {
+    return t("validation.configure");
+  }
+
+  let value;
+  try {
+    value = path ? getAtPath(state.config, path) : state.config;
+  } catch {
+    return label;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length > 0 && value.every((item) => typeof item === "string")) {
+      return state.locale === "zh" ? `${label} 的可选列表。` : `Selectable list for ${label}.`;
+    }
+    return state.locale === "zh" ? `${label} 的列表设置。` : `List setting for ${label}.`;
+  }
+  if (value && typeof value === "object") {
+    const keys = Object.keys(value);
+    if (keys.length === 2 && keys.includes("min") && keys.includes("max")) {
+      return state.locale === "zh" ? `${label} 的数值范围。` : `Numeric range for ${label}.`;
+    }
+    if (path.includes(".per_type.")) {
+      return state.locale === "zh" ? `${label} 的逐类型设置。` : `Per-type settings for ${label}.`;
+    }
+    return state.locale === "zh" ? `${label} 的参数组。` : `Parameter group for ${label}.`;
+  }
+  if (typeof value === "boolean") {
+    return state.locale === "zh" ? `${label} 的开关。` : `Toggle for ${label}.`;
+  }
+  if (typeof value === "number") {
+    return state.locale === "zh" ? `${label} 的数值设置。` : `Numeric setting for ${label}.`;
+  }
+  if (typeof value === "string") {
+    return state.locale === "zh" ? `${label} 的类别选项。` : `Categorical option for ${label}.`;
+  }
+  return label;
 }
 
 function getDatasetLabel(entry) {

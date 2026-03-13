@@ -6,7 +6,6 @@ import numpy as np
 
 from ..config import GeneratorConfig
 from ..interfaces import ARXModelParams, ARXParams
-from ..utils import clamp_float
 from .dag import CausalGraph
 
 
@@ -85,11 +84,8 @@ class ARXSystem:
                         forcing += float(gain[parent, node]) * x[src_t, parent]
 
                 z_val = a[node] * prev + forcing + bias[node]
-                z_val = clamp_float(float(z_val), -20.0, 20.0)
-                z[t, node] = z_val
+                z[t, node] = float(z_val)
                 x[t, node] = (1.0 - alpha[node]) * x_base[t, node] + alpha[node] * z_val
-
-            x[t] = np.clip(x[t], -30.0, 30.0)
 
         return x, ARXState(z=z, params=params)
 

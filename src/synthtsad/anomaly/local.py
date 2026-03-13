@@ -503,7 +503,7 @@ class SpikeLevelHandler(LocalAnomalyHandler):
             "shift_start": shift_start,
             "shift_magnitude": shift_magnitude,
         }
-        return t_start, n, params
+        return t_start, t_end, params
 
     def render(
         self,
@@ -896,18 +896,23 @@ class LocalAnomalyInjector:
         for event in events:
             if event.family != "local":
                 raise ValueError(f"LocalAnomalyInjector received non-local event: {event.family}")
-            local_params = cast(LocalEventParams, event.params)
-            delta = self._render_template(
-                kind=event.anomaly_type,
-                n=n,
-                t_start=event.t_start,
-                t_end=event.t_end,
-                params=local_params,
-            )
+            delta = self.render_event_delta(n=n, event=event)
             x_anom[:, event.node] += delta
             realized.append(event)
 
         return x_anom, realized
+
+    def render_event_delta(self, n: int, event: AnomalyEvent) -> np.ndarray:
+        if event.family != "local":
+            raise ValueError(f"LocalAnomalyInjector received non-local event: {event.family}")
+        local_params = cast(LocalEventParams, event.params)
+        return self._render_template(
+            kind=event.anomaly_type,
+            n=n,
+            t_start=event.t_start,
+            t_end=event.t_end,
+            params=local_params,
+        )
 
     def inject(
         self,

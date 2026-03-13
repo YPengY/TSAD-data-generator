@@ -263,6 +263,144 @@ FIELD_LABELS_ZH = {
     "enable_seasonal_anomaly": "启用季节异常",
 }
 
+TOKEN_LABELS = {
+    "none": "None",
+    "sine": "Sine",
+    "square": "Square",
+    "triangle": "Triangle",
+    "wavelet": "Wavelet",
+    "increase": "Increase",
+    "decrease": "Decrease",
+    "keep_steady": "Keep Steady",
+    "multiple": "Multiple",
+    "arima": "ARIMA",
+    "low": "Low",
+    "high": "High",
+    "almost_none": "Almost None",
+    "moderate": "Moderate",
+    "morlet": "Morlet",
+    "ricker": "Ricker",
+    "haar": "Haar",
+    "gaus": "Gaussian",
+    "mexh": "Mexican Hat",
+    "shan": "Shannon",
+    "uniform": "Uniform",
+    "seasonal_eligible": "Seasonal Eligible",
+    "observed": "Observed",
+    "seasonality": "Seasonality",
+    "baseline": "Baseline",
+    "upward_spike": "Upward Spike",
+    "downward_spike": "Downward Spike",
+    "continuous_upward_spikes": "Continuous Upward Spikes",
+    "continuous_downward_spikes": "Continuous Downward Spikes",
+    "wide_upward_spike": "Wide Upward Spike",
+    "wide_downward_spike": "Wide Downward Spike",
+    "outlier": "Outlier",
+    "sudden_increase": "Sudden Increase",
+    "sudden_decrease": "Sudden Decrease",
+    "convex_plateau": "Convex Plateau",
+    "concave_plateau": "Concave Plateau",
+    "plateau": "Plateau",
+    "rapid_rise_slow_decline": "Rapid Rise -> Slow Decline",
+    "slow_rise_rapid_decline": "Slow Rise -> Rapid Decline",
+    "rapid_decline_slow_rise": "Rapid Decline -> Slow Rise",
+    "slow_decline_rapid_rise": "Slow Decline -> Rapid Rise",
+    "decrease_after_upward_spike": "Decrease After Upward Spike",
+    "increase_after_downward_spike": "Increase After Downward Spike",
+    "increase_after_upward_spike": "Increase After Upward Spike",
+    "decrease_after_downward_spike": "Decrease After Downward Spike",
+    "shake": "Shake",
+    "waveform_inversion": "Waveform Inversion",
+    "amplitude_scaling": "Amplitude Scaling",
+    "frequency_change": "Frequency Change",
+    "phase_shift": "Phase Shift",
+    "noise_injection": "Noise Injection",
+    "waveform_change": "Waveform Change",
+    "add_harmonic": "Add Harmonic",
+    "remove_harmonic": "Remove Harmonic",
+    "modify_harmonic_phase": "Modify Harmonic Phase",
+    "modify_modulation_depth": "Modify Modulation Depth",
+    "modify_modulation_frequency": "Modify Modulation Frequency",
+    "modify_modulation_phase": "Modify Modulation Phase",
+    "pulse_shift": "Pulse Shift",
+    "pulse_width_modulation": "Pulse Width Modulation",
+    "wavelet_family_change": "Wavelet Family Change",
+    "wavelet_scale_change": "Wavelet Scale Change",
+    "wavelet_shift_change": "Wavelet Shift Change",
+    "wavelet_amplitude_change": "Wavelet Amplitude Change",
+    "add_wavelet": "Add Wavelet",
+    "remove_wavelet": "Remove Wavelet",
+}
+
+TOKEN_LABELS_ZH = {
+    "none": "无",
+    "sine": "正弦",
+    "square": "方波",
+    "triangle": "三角波",
+    "wavelet": "小波",
+    "increase": "上升",
+    "decrease": "下降",
+    "keep_steady": "平稳",
+    "multiple": "多段",
+    "arima": "ARIMA",
+    "low": "低频",
+    "high": "高频",
+    "almost_none": "几乎无",
+    "moderate": "中等",
+    "morlet": "Morlet",
+    "ricker": "Ricker",
+    "haar": "Haar",
+    "gaus": "高斯",
+    "mexh": "墨西哥帽",
+    "shan": "Shannon",
+    "uniform": "均匀",
+    "seasonal_eligible": "季节有效节点",
+    "observed": "观测层",
+    "seasonality": "季节组件",
+    "baseline": "基线层",
+    "upward_spike": "上升尖峰",
+    "downward_spike": "下降尖峰",
+    "continuous_upward_spikes": "连续上升尖峰",
+    "continuous_downward_spikes": "连续下降尖峰",
+    "wide_upward_spike": "宽上升尖峰",
+    "wide_downward_spike": "宽下降尖峰",
+    "outlier": "异常点",
+    "sudden_increase": "突增",
+    "sudden_decrease": "突降",
+    "convex_plateau": "凸平台",
+    "concave_plateau": "凹平台",
+    "plateau": "平台",
+    "rapid_rise_slow_decline": "快升慢降",
+    "slow_rise_rapid_decline": "慢升快降",
+    "rapid_decline_slow_rise": "快降慢升",
+    "slow_decline_rapid_rise": "慢降快升",
+    "decrease_after_upward_spike": "上升尖峰后下降",
+    "increase_after_downward_spike": "下降尖峰后上升",
+    "increase_after_upward_spike": "上升尖峰后上升",
+    "decrease_after_downward_spike": "下降尖峰后下降",
+    "shake": "抖动",
+    "waveform_inversion": "波形反转",
+    "amplitude_scaling": "幅值缩放",
+    "frequency_change": "频率变化",
+    "phase_shift": "相位偏移",
+    "noise_injection": "噪声注入",
+    "waveform_change": "波形变换",
+    "add_harmonic": "添加谐波",
+    "remove_harmonic": "移除谐波",
+    "modify_harmonic_phase": "修改谐波相位",
+    "modify_modulation_depth": "修改调制深度",
+    "modify_modulation_frequency": "修改调制频率",
+    "modify_modulation_phase": "修改调制相位",
+    "pulse_shift": "脉冲平移",
+    "pulse_width_modulation": "脉宽调制",
+    "wavelet_family_change": "小波族变化",
+    "wavelet_scale_change": "小波尺度变化",
+    "wavelet_shift_change": "小波平移变化",
+    "wavelet_amplitude_change": "小波幅值变化",
+    "add_wavelet": "添加小波",
+    "remove_wavelet": "移除小波",
+}
+
 PATH_LABEL_OVERRIDES = {
     "weights.seasonality_type": "Seasonality Type Weights",
     "weights.seasonality_type.none": "None Weight",
@@ -634,10 +772,49 @@ def _pretty_label(path: str, locale: str = "en") -> str:
     leaf = path.split(".")[-1]
     if leaf in field_labels:
         return field_labels[leaf]
-    return leaf.replace("_", " ").title()
+    return _format_token_label(leaf, locale=locale)
 
 
-def _describe_path(path: str, locale: str = "en") -> str:
+def _format_token_label(value: str, locale: str = "en") -> str:
+    token_labels = TOKEN_LABELS_ZH if locale == "zh" else TOKEN_LABELS
+    if value in token_labels:
+        return token_labels[value]
+    return value.replace("_", " ").title()
+
+
+def _describe_value(path: str, value: Any, locale: str = "en") -> str:
+    label = _pretty_label(path, locale=locale)
+    if isinstance(value, dict):
+        if set(value.keys()) == {"min", "max"} and not isinstance(value.get("min"), bool):
+            return f"Numeric range for {label}." if locale == "en" else f"{label} 的数值范围。"
+        if ".per_type." in path:
+            return (
+                f"Per-type settings for {label}." if locale == "en" else f"{label} 的逐类型设置。"
+            )
+        return f"Parameter group for {label}." if locale == "en" else f"{label} 的参数组。"
+    if isinstance(value, list):
+        if value and all(isinstance(item, str) for item in value):
+            return f"Selectable list for {label}." if locale == "en" else f"{label} 的可选列表。"
+        return f"List setting for {label}." if locale == "en" else f"{label} 的列表设置。"
+    if isinstance(value, bool):
+        return f"Toggle for {label}." if locale == "en" else f"{label} 的开关。"
+    if isinstance(value, (int, float)):
+        return f"Numeric setting for {label}." if locale == "en" else f"{label} 的数值设置。"
+    if isinstance(value, str):
+        return f"Categorical option for {label}." if locale == "en" else f"{label} 的类别选项。"
+    return f"Definition for {label}." if locale == "en" else f"{label} 的配置项。"
+
+
+def _value_at_path(node: Any, path: str) -> Any:
+    if path == "root":
+        return node
+    current = node
+    for part in path.split("."):
+        current = current[part]
+    return current
+
+
+def _describe_path(path: str, value: Any, locale: str = "en") -> str:
     section_descriptions = SECTION_DESCRIPTIONS_ZH if locale == "zh" else SECTION_DESCRIPTIONS
     field_descriptions = FIELD_DESCRIPTIONS_ZH if locale == "zh" else FIELD_DESCRIPTIONS
     if path in section_descriptions:
@@ -667,6 +844,44 @@ def _build_locale_payload(defaults: dict[str, Any], locale: str) -> dict[str, An
     }
     path_labels["root"] = SECTION_LABELS_ZH["root"] if locale == "zh" else SECTION_LABELS["root"]
     path_descriptions["root"] = _describe_path("root", locale=locale)
+    return {
+        "pathLabels": path_labels,
+        "pathDescriptions": path_descriptions,
+    }
+
+
+def _describe_path_payload(path: str, value: Any, locale: str = "en") -> str:
+    section_descriptions = SECTION_DESCRIPTIONS_ZH if locale == "zh" else SECTION_DESCRIPTIONS
+    field_descriptions = FIELD_DESCRIPTIONS_ZH if locale == "zh" else FIELD_DESCRIPTIONS
+    if path in section_descriptions:
+        return section_descriptions[path]
+    leaf = path.split(".")[-1]
+    if path.startswith("weights.") and leaf not in {
+        "weights",
+        "seasonality_type",
+        "trend_type",
+        "frequency_regime",
+        "noise_level",
+    }:
+        return (
+            "This weight controls how often the option is sampled."
+            if locale == "en"
+            else "这个权重决定对应选项被采样到的频率。"
+        )
+    if leaf in field_descriptions:
+        return field_descriptions[leaf]
+    return _describe_value(path, value, locale=locale)
+
+
+def _build_locale_payload_v2(defaults: dict[str, Any], locale: str) -> dict[str, Any]:
+    paths = _collect_paths(defaults)
+    path_labels = {path: _pretty_label(path, locale=locale) for path in paths}
+    path_descriptions = {
+        path: _describe_path_payload(path, _value_at_path(defaults, path), locale=locale)
+        for path in paths
+    }
+    path_labels["root"] = SECTION_LABELS_ZH["root"] if locale == "zh" else SECTION_LABELS["root"]
+    path_descriptions["root"] = _describe_path_payload("root", defaults, locale=locale)
     return {
         "pathLabels": path_labels,
         "pathDescriptions": path_descriptions,
@@ -704,6 +919,8 @@ def get_bootstrap_payload() -> dict[str, Any]:
     defaults = load_default_config_raw()
     multi_select_options = _build_multi_select_options(defaults)
     select_options = _build_select_options()
+    locale_payload_en = _build_locale_payload_v2(defaults, locale="en")
+    locale_payload_zh = _build_locale_payload_v2(defaults, locale="zh")
     return {
         "defaults": defaults,
         "ui": {
@@ -712,11 +929,11 @@ def get_bootstrap_payload() -> dict[str, Any]:
             "multiSelectOptions": multi_select_options,
             "selectOptions": select_options,
             "numericBounds": _build_numeric_bounds(),
-            "pathLabels": _build_locale_payload(defaults, locale="en")["pathLabels"],
-            "pathDescriptions": _build_locale_payload(defaults, locale="en")["pathDescriptions"],
+            "pathLabels": locale_payload_en["pathLabels"],
+            "pathDescriptions": locale_payload_en["pathDescriptions"],
             "locales": {
-                "en": _build_locale_payload(defaults, locale="en"),
-                "zh": _build_locale_payload(defaults, locale="zh"),
+                "en": locale_payload_en,
+                "zh": locale_payload_zh,
             },
         },
     }
@@ -975,6 +1192,16 @@ def preview_sample(raw_config: dict[str, Any]) -> dict[str, Any]:
     post_causal_local_events = [
         event for event in sampled_local_events if not bool(event.is_endogenous)
     ]
+
+    if cfg.debug.enable_causal and pre_causal_local_events:
+        pipeline._annotate_endogenous_local_events(
+            n=n,
+            d=d,
+            local_injector=local_injector,
+            events=pre_causal_local_events,
+            arx=arx,
+            arx_params=arx_params,
+        )
 
     x_stage1_anom = x_stage1.copy()
     realized_events: list[AnomalyEvent] = []

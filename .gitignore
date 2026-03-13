@@ -75,6 +75,15 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Type-check / local state
+.pyright/
+.pyre/
+*.db
+*.sqlite
+*.sqlite3
+*.pid
+*.pid.lock
+
 # OS / editor noise
 .DS_Store
 Thumbs.db

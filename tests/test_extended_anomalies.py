@@ -7,6 +7,7 @@ from synthtsad.anomaly.local import AnomalyEvent, LocalAnomalyInjector
 from synthtsad.anomaly.seasonal import SeasonalAnomalyInjector
 from synthtsad.causal.arx import ARXSystem
 from synthtsad.causal.dag import CausalGraph
+from synthtsad.pipeline import SyntheticGeneratorPipeline
 
 
 def _make_cfg() -> object:
@@ -78,6 +79,21 @@ def test_extended_local_templates_render_expected_shapes() -> None:
     assert float(np.max(x_interaction[:18, 0])) > 0.0
     assert np.all(x_interaction[18:, 0] <= 1e-8)
     assert float(np.min(x_interaction[18:, 0])) < -0.5
+
+
+def test_spike_level_sampling_keeps_local_event_window_with_persistent_shift() -> None:
+    cfg = _make_cfg()
+    injector = LocalAnomalyInjector(cfg)
+    rng = np.random.default_rng(0)
+    kind = "decrease_after_upward_spike"
+    spec = cfg.anomaly.local.per_type[kind]
+
+    t_start, t_end, params = injector._sample_template_spec(kind=kind, n=64, rng=rng, spec=spec)
+    delta = injector._render_template(kind=kind, n=64, t_start=t_start, t_end=t_end, params=params)
+
+    assert t_end < 64
+    assert np.any(np.abs(delta[t_start:t_end]) > 1e-8)
+    assert np.any(np.abs(delta[t_end:]) > 1e-8)
 
 
 def test_local_handlers_cover_enabled_weighted_types() -> None:
@@ -230,3 +246,107 @@ def test_endogenous_seasonal_event_propagates_through_causal_response() -> None:
     assert np.any(np.abs(x_out[:, 0]) > 1e-8)
     assert np.any(np.abs(x_out[:, 1]) > 1e-8)
     assert 1 in realized[0].affected_nodes
+
+
+def test_endogenous_local_event_propagates_affected_nodes_through_causal_response() -> None:
+    cfg = _make_cfg()
+    graph = CausalGraph(
+        num_nodes=2,
+        adjacency=np.array([[0, 1], [0, 0]], dtype=np.int8),
+        topo_order=[0, 1],
+        parents=[[], [0]],
+    )
+    arx = ARXSystem(cfg, graph)
+    params = {
+        "a": [0.0, 0.0],
+        "alpha": [0.0, 1.0],
+        "bias": [0.0, 0.0],
+        "lag": [[0, 0], [0, 0]],
+        "gain": [[0.0, 1.0], [0.0, 0.0]],
+        "max_lag": 0,
+    }
+    event = AnomalyEvent(
+        anomaly_type="upward_spike",
+        node=0,
+        t_start=8,
+        t_end=24,
+        params={"amplitude": 1.2, "center": 12, "half_width": 2},
+        is_endogenous=True,
+        root_cause_node=0,
+        affected_nodes=[0],
+    )
+    pipeline = SyntheticGeneratorPipeline(cfg)
+    injector = LocalAnomalyInjector(cfg)
+
+    pipeline._annotate_endogenous_local_events(
+        n=64,
+        d=2,
+        local_injector=injector,
+        events=[event],
+        arx=arx,
+        arx_params=params,
+    )
+
+    assert event.affected_nodes == [0, 1]
+
+
+def test_arx_simulation_does_not_clip_latent_or_observed_values() -> None:
+    cfg = _make_cfg()
+    graph = CausalGraph(
+        num_nodes=1,
+        adjacency=np.array([[0]], dtype=np.int8),
+        topo_order=[0],
+        parents=[[]],
+    )
+    arx = ARXSystem(cfg, graph)
+    params = {
+        "a": [0.0],
+        "alpha": [1.0],
+        "bias": [50.0],
+        "lag": [[0]],
+        "gain": [[0.0]],
+        "max_lag": 0,
+    }
+
+    x_out, state = arx.simulate_with_params(
+        x_base=np.zeros((8, 1), dtype=float),
+        n_steps=8,
+        params=params,
+    )
+
+    assert float(np.max(state.z[:, 0])) == 50.0
+    assert float(np.max(x_out[:, 0])) == 50.0
+
+
+def test_arx_linear_response_is_additive() -> None:
+    cfg = _make_cfg()
+    graph = CausalGraph(
+        num_nodes=2,
+        adjacency=np.array([[0, 1], [0, 0]], dtype=np.int8),
+        topo_order=[0, 1],
+        parents=[[], [0]],
+    )
+    arx = ARXSystem(cfg, graph)
+    params = {
+        "a": [0.0, 0.0],
+        "alpha": [0.0, 1.0],
+        "bias": [0.0, 0.0],
+        "lag": [[0, 0], [0, 0]],
+        "gain": [[0.0, 2.0], [0.0, 0.0]],
+        "max_lag": 0,
+    }
+
+    delta1 = np.zeros((8, 2), dtype=float)
+    delta2 = np.zeros((8, 2), dtype=float)
+    delta1[:, 0] = 15.0
+    delta2[:, 0] = 25.0
+
+    response1, _ = arx.simulate_linear_response(x_base=delta1, n_steps=8, params=params)
+    response2, _ = arx.simulate_linear_response(x_base=delta2, n_steps=8, params=params)
+    combined, _ = arx.simulate_linear_response(
+        x_base=delta1 + delta2,
+        n_steps=8,
+        params=params,
+    )
+
+    assert np.allclose(combined, response1 + response2)

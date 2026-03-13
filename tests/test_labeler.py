@@ -7,7 +7,7 @@ from synthtsad.anomaly.local import AnomalyEvent
 from synthtsad.labeling.labeler import LabelBuilder
 
 
-def test_root_cause_affected_nodes_use_event_window_only() -> None:
+def test_labels_mark_declared_affected_nodes_within_injected_regions() -> None:
     cfg = load_config_from_raw(
         {
             "num_samples": 1,
@@ -21,7 +21,7 @@ def test_root_cause_affected_nodes_use_event_window_only() -> None:
     x_normal = np.zeros((10, 3), dtype=float)
     x_anom = x_normal.copy()
     x_anom[2:5, 0] = 1.0
-    x_anom[3:5, 1] = 0.5
+    x_anom[2:5, 1] = 0.5
     x_anom[7:9, 2] = 2.0
 
     events = [
@@ -33,7 +33,7 @@ def test_root_cause_affected_nodes_use_event_window_only() -> None:
             params={"amplitude": 1.0},
             is_endogenous=True,
             root_cause_node=0,
-            affected_nodes=[0],
+            affected_nodes=[0, 1],
         ),
         AnomalyEvent(
             anomaly_type="upward_spike",
@@ -59,6 +59,9 @@ def test_root_cause_affected_nodes_use_event_window_only() -> None:
     assert labels["affected_nodes"] == {"0": [0, 1]}
     assert labels["events"][0]["affected_nodes"] == [0, 1]
     assert labels["events"][1]["affected_nodes"] == [2]
+    assert labels["point_mask"][:, 1].tolist() == [0, 0, 1, 1, 1, 0, 0, 0, 0, 0]
+    assert labels["point_mask"][:, 0].tolist() == [0, 0, 1, 1, 1, 0, 0, 0, 0, 0]
+    assert labels["point_mask"][:, 2].tolist() == [0, 0, 0, 0, 0, 0, 0, 1, 1, 0]
     assert labels["summary"] == {
         "total": 2,
         "local": 2,
